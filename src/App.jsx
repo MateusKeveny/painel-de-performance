@@ -88,28 +88,24 @@ function PerformanceChart({ weeklyData, t }) {
   );
 }
 
-// CORREÇÃO: Identificador Robusto de Semanas (Ignora zeros à esquerda e entende barras/traços)
+// CORREÇÃO DEFINITIVA: Leitura exata do formato do Supabase (YYYY-MM-DD)
 const getMetrificationWeek = (dateString) => {
   if (!dateString) return null;
   
-  const cleanDate = dateString.split(' ')[0];
-  let y, m, d;
-
-  if (cleanDate.includes('/')) {
-    [d, m, y] = cleanDate.split('/');
-  } else if (cleanDate.includes('-')) {
-    [y, m, d] = cleanDate.split('-');
-  } else {
-    return null;
-  }
-
-  const month = parseInt(m, 10);
-  const day = parseInt(d, 10);
+  // Pega apenas os 10 primeiros caracteres (ex: "2026-08-14")
+  const cleanDate = dateString.substring(0, 10);
+  const parts = cleanDate.split('-');
+  
+  if (parts.length !== 3) return null;
+  
+  const month = parseInt(parts[1], 10);
+  const day = parseInt(parts[2], 10);
 
   if ((month === 7 && day >= 26) || (month === 8 && day <= 2)) return 1;
   if (month === 8 && day >= 3 && day <= 10) return 2;
   if (month === 8 && day >= 11 && day <= 18) return 3;
   if (month === 8 && day >= 19 && day <= 25) return 4;
+  
   return null;
 };
 
@@ -154,7 +150,13 @@ export default function CsatApp() {
     let mounted = true;
     (async () => {
       setLoading(true);
-      let query = supabase.from('atendimentos').select('*').order('criado_em', { ascending: false });
+      
+      // TRAVA REMOVIDA: Puxando até 15.000 chamados para não cortar Semanas 1 e 2
+      let query = supabase.from('atendimentos')
+        .select('*')
+        .limit(15000) 
+        .order('criado_em', { ascending: false });
+        
       if (!ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
         query = query.eq('atendente', session.user.email);
       }
