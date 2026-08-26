@@ -137,6 +137,7 @@ function TeamBarChart({ data, t, goal, teamAvg }) {
   );
 }
 
+// FORMATADOR DE DATA 100% BLINDADO
 const getMetrificationWeek = (dateString) => {
   if (!dateString) return null;
   let d, m, y;
@@ -152,6 +153,13 @@ const getMetrificationWeek = (dateString) => {
   if (month === 8 && day >= 11 && day <= 18) return 3;
   if (month === 8 && day >= 19 && day <= 25) return 4;
   return null;
+};
+
+// VALIDADOR ESTRITO (EQUIVALENTE AO CONT.SES DO EXCEL)
+const isValidRecord = (r) => {
+  if (getMetrificationWeek(r.data) === null) return false;
+  const val = Number(r.avaliacao);
+  return [1, 2, 3, 4, 5].includes(val);
 };
 
 export default function CsatApp() {
@@ -268,43 +276,44 @@ export default function CsatApp() {
     return allRecords;
   }, [allRecords, isAdmin, selectedAgent]);
 
-  // CÁLCULO GERAL DINÂMICO
+  // CÁLCULO GERAL (C-SAT Atual) - Travado no Ciclo (CONT.SES)
   const myPct = useMemo(() => {
-    const valid = displayRecords.filter(r => !isNaN(Number(r.avaliacao)) && Number(r.avaliacao) > 0);
-    if (!valid.length) return 0;
-    const pos = valid.filter(r => Number(r.avaliacao) >= 4);
-    return (pos.length / valid.length) * 100;
+    const validRecords = displayRecords.filter(isValidRecord);
+    if (validRecords.length === 0) return 0;
+    
+    const positiveRecords = validRecords.filter(r => Number(r.avaliacao) >= 4);
+    return (positiveRecords.length / validRecords.length) * 100;
   }, [displayRecords]);
 
-  // MÉDIA DINÂMICA DA EQUIPE COMPLETA (Para renderizar no gráfico)
+  // MÉDIA DA EQUIPE (Linha do Gráfico) - Travada no Ciclo (CONT.SES)
   const liveTeamAvg = useMemo(() => {
-    if (!isAdmin) return 82.93; // Operador comum vê número base para segurança
-    const valid = allRecords.filter(r => !isNaN(Number(r.avaliacao)) && Number(r.avaliacao) > 0);
-    if (!valid.length) return 0;
-    const pos = valid.filter(r => Number(r.avaliacao) >= 4);
-    return (pos.length / valid.length) * 100;
+    if (!isAdmin) return 82.93; // Operador vê número base por segurança
+    
+    const validRecords = allRecords.filter(isValidRecord);
+    if (validRecords.length === 0) return 0;
+    
+    const positiveRecords = validRecords.filter(r => Number(r.avaliacao) >= 4);
+    return (positiveRecords.length / validRecords.length) * 100;
   }, [allRecords, isAdmin]);
 
-  // AGREGAÇÃO PARA O NOVO GRÁFICO DE BARRAS (ADMIN ONLY)
+  // RANKING DA EQUIPE (Gráfico Gestor) - Travado no Ciclo (CONT.SES)
   const agentsStats = useMemo(() => {
     if (!isAdmin || selectedAgent !== "ALL") return [];
     const stats = {};
-    allRecords.forEach(r => {
+    allRecords.filter(isValidRecord).forEach(r => {
       const agent = r.atendente;
       if (!stats[agent]) stats[agent] = { total: 0, positive: 0 };
-      const val = Number(r.avaliacao);
-      if (!isNaN(val) && val > 0) {
-        stats[agent].total += 1;
-        if (val === 4 || val === 5) stats[agent].positive += 1;
-      }
+      stats[agent].total += 1;
+      if (Number(r.avaliacao) >= 4) stats[agent].positive += 1;
     });
-    return Object.entries(stats).filter(([_, d]) => d.total > 0).map(([agent, d]) => ({
+    return Object.entries(stats).map(([agent, d]) => ({
       name: agent.split('@')[0],
       pct: (d.positive / d.total) * 100,
       total: d.total
-    })).sort((a, b) => b.pct - a.pct); // Do maior para o menor C-SAT
+    })).sort((a, b) => b.pct - a.pct);
   }, [allRecords, isAdmin, selectedAgent]);
 
+  // DESEMPENHO SEMANAL - Travado no Ciclo (CONT.SES)
   const weeklyStats = useMemo(() => {
     const stats = {
       1: { name: "1ª Semana", label: "26/07 a 02/08", items: [] },
@@ -317,9 +326,15 @@ export default function CsatApp() {
       if (weekId && stats[weekId]) stats[weekId].items.push(r);
     });
     return Object.values(stats).map(w => {
-      const valid = w.items.filter(r => !isNaN(Number(r.avaliacao)) && Number(r.avaliacao) > 0);
-      const pos = valid.filter(r => Number(r.avaliacao) >= 4);
-      return { name: w.name, label: w.label, total: valid.length, pct: valid.length > 0 ? (pos.length / valid.length) * 100 : 0, hasData: valid.length > 0 };
+      const validInWeek = w.items.filter(r => [1, 2, 3, 4, 5].includes(Number(r.avaliacao)));
+      const pos = validInWeek.filter(r => Number(r.avaliacao) >= 4);
+      return { 
+        name: w.name, 
+        label: w.label, 
+        total: validInWeek.length, 
+        pct: validInWeek.length > 0 ? (pos.length / validInWeek.length) * 100 : 0, 
+        hasData: validInWeek.length > 0 
+      };
     });
   }, [displayRecords]);
 
@@ -364,6 +379,26 @@ export default function CsatApp() {
             {authError && <div className="text-sm border border-red-500/50 bg-red-500/10 text-red-400 rounded-lg px-3 py-2 text-center">{authError}</div>}
             <button type="submit" disabled={authLoading} className="w-full rounded-xl py-3 font-bold text-white bg-[#1F9D6B] hover:bg-[#188057] transition-all flex justify-center items-center gap-2 mt-4">
               {authLoading ? <Loader2 size={18} className="animate-spin" /> : "Entrar"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  if (needsPasswordChange) {
+    return (
+      <div className="fixed inset-0 overflow-y-auto flex flex-col items-center justify-center p-6 bg-[#0A0A0A]" style={{ backgroundImage: `url('${BACKGROUND_URL}')`, backgroundSize: 'cover', backgroundPosition: 'left', fontFamily: "'Inter', sans-serif" }}>
+        <style>{FONTS}</style>
+        <div className="w-full max-w-md rounded-3xl border border-white/20 bg-black/60 backdrop-blur-md p-10 shadow-2xl">
+          <h2 className="text-xl font-bold mb-2 text-white text-center" style={{ fontFamily: "'Montserrat', sans-serif" }}>Defina sua Senha Pessoal</h2>
+          <p className="text-sm text-gray-300 text-center mb-8">Como este é o seu primeiro acesso, crie uma senha segura.</p>
+          <form onSubmit={handlePasswordChange} className="space-y-5">
+            <input type="password" placeholder="Nova senha" required value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-[#1F9D6B]" />
+            <input type="password" placeholder="Confirmar nova senha" required value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-[#1F9D6B]" />
+            {authError && <div className="text-red-400 text-sm text-center">{authError}</div>}
+            <button type="submit" disabled={authLoading} className="w-full py-3 bg-[#1F9D6B] text-white rounded-xl font-bold hover:bg-[#188057] flex justify-center items-center">
+              {authLoading ? <Loader2 size={18} className="animate-spin" /> : "Salvar nova senha"}
             </button>
           </form>
         </div>
@@ -420,7 +455,7 @@ export default function CsatApp() {
             {view === "dashboard" && (
               <div className="flex flex-col lg:flex-row gap-12 w-full animate-in fade-in duration-500 items-start">
                 
-                {/* LADO ESQUERDO (Fixado no topo para descer com o scroll caso os gráficos fiquem grandes) */}
+                {/* LADO ESQUERDO */}
                 <div className="flex flex-col flex-1 gap-6 sticky top-8">
                   <h2 className="text-3xl sm:text-4xl font-bold mb-2" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                     {isAdmin && selectedAgent === "ALL" ? "Painel da Equipe" : "Painel de Performance"}
@@ -451,7 +486,7 @@ export default function CsatApp() {
                   </button>
                 </div>
 
-                {/* LADO DIREITO (Empilhando os gráficos para gestores) */}
+                {/* LADO DIREITO */}
                 <div className="flex flex-col flex-[2] gap-8 w-full">
                   <div className="w-full border rounded-[2rem] p-6 shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
                     <h3 className="text-center font-bold mb-6 text-lg" style={{ fontFamily: "'Montserrat', sans-serif" }}>Desempenho Semanal</h3>
@@ -541,7 +576,7 @@ export default function CsatApp() {
                     </table>
                   </div>
                   <div className="p-4 text-xs italic border-t transition-colors duration-300" style={{ borderColor: t.border, color: t.textSoft }}>
-                    * Notas 0 e -1 não impactam no resultado
+                    * Notas 0, -1 e vazias não impactam no resultado final
                   </div>
                 </div>
               </div>
