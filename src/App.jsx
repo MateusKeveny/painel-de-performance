@@ -9,10 +9,9 @@ const BACKGROUND_URL = "https://i.postimg.cc/fT3Trm2M/Template-apresentacao-i-Gr
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const GOAL = 95;
-const TEAM_AVERAGE = 82.93; // Média atual consolidada da equipe
+const TEAM_AVERAGE = 82.93; 
 const DEFAULT_PASSWORD = "iGreen@2026";
 
-// COLOQUE AQUI OS E-MAILS DOS GESTORES (Eles terão acesso a tudo)
 const ADMIN_EMAILS = [
   "mateus.silva@igreenenergy.com.br",
   "gestor@igreenenergy.com.br"
@@ -32,7 +31,6 @@ const tokens = {
   dark: { bg: "#0B1412", panel: "#101E1B", panel2: "#152420", text: "#EAF3EE", textSoft: "#93A69D", border: "#1F332C", accent: "#35D07F", accentSoft: "#12281F", warn: "#E8B94A", danger: "#E17163", needle: "#EAF3EE" },
 };
 
-// COMPONENTE: Gráfico de Linha/Pontos de Performance
 function PerformanceChart({ weeklyData, t }) {
   const width = 500;
   const height = 250;
@@ -43,7 +41,7 @@ function PerformanceChart({ weeklyData, t }) {
   const chartH = height - paddingY * 2;
 
   const goalY = paddingY + chartH - ((GOAL / 100) * chartH);
-  const avgY = paddingY + chartH - ((TEAM_AVERAGE / 100) * chartH); // Posição Y da média da equipe
+  const avgY = paddingY + chartH - ((TEAM_AVERAGE / 100) * chartH); 
 
   const xStep = chartW / 3;
   const points = weeklyData.map((w, i) => {
@@ -57,24 +55,19 @@ function PerformanceChart({ weeklyData, t }) {
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
-      {/* Eixos */}
       <line x1={paddingX} y1={paddingY - 10} x2={paddingX} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
       <line x1={paddingX} y1={height - paddingY} x2={width - paddingX + 10} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
 
-      {/* Linha da Média da Equipe (Cinza/Neutra) */}
       <line x1={paddingX} y1={avgY} x2={width - paddingX + 10} y2={avgY} stroke={t.textSoft} strokeWidth="2" strokeDasharray="4,4" opacity="0.6" />
       <text x={width - paddingX + 18} y={avgY + 4} fill={t.textSoft} fontSize="11" fontWeight="600" style={{ fontFamily: "'Montserrat', sans-serif" }}>Média</text>
 
-      {/* Linha da Meta 95% (Amarela/Aviso) */}
       <line x1={paddingX} y1={goalY} x2={width - paddingX + 10} y2={goalY} stroke={t.warn} strokeWidth="2" strokeDasharray="6,6" />
       <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>95%</text>
 
-      {/* Linha de Conexão dos Resultados (Verde) */}
       {validPoints.length > 1 && (
         <path d={pathD} fill="none" stroke={t.accent} strokeWidth="3" opacity="0.5" />
       )}
 
-      {/* Pontos de Dados */}
       {points.map((p, i) => (
         <g key={i}>
           <text x={p.x} y={height - paddingY + 20} textAnchor="middle" fontSize="11" fill={t.textSoft} fontWeight="600" style={{ fontFamily: "'Inter', sans-serif" }}>{p.name}</text>
@@ -95,14 +88,28 @@ function PerformanceChart({ weeklyData, t }) {
   );
 }
 
+// CORREÇÃO: Identificador Robusto de Semanas (Ignora zeros à esquerda e entende barras/traços)
 const getMetrificationWeek = (dateString) => {
   if (!dateString) return null;
-  const [y, m, d] = dateString.split(' ')[0].split('-');
   
-  if ((m === '07' && d >= '26') || (m === '08' && d <= '02')) return 1;
-  if (m === '08' && d >= '03' && d <= '10') return 2;
-  if (m === '08' && d >= '11' && d <= '18') return 3;
-  if (m === '08' && d >= '19' && d <= '25') return 4;
+  const cleanDate = dateString.split(' ')[0];
+  let y, m, d;
+
+  if (cleanDate.includes('/')) {
+    [d, m, y] = cleanDate.split('/');
+  } else if (cleanDate.includes('-')) {
+    [y, m, d] = cleanDate.split('-');
+  } else {
+    return null;
+  }
+
+  const month = parseInt(m, 10);
+  const day = parseInt(d, 10);
+
+  if ((month === 7 && day >= 26) || (month === 8 && day <= 2)) return 1;
+  if (month === 8 && day >= 3 && day <= 10) return 2;
+  if (month === 8 && day >= 11 && day <= 18) return 3;
+  if (month === 8 && day >= 19 && day <= 25) return 4;
   return null;
 };
 
@@ -120,12 +127,11 @@ export default function CsatApp() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   
-  // VARIÁVEIS GLOBAIS DE DADOS
   const [allRecords, setAllRecords] = useState([]);
   const [view, setView] = useState("dashboard");
   const [savingId, setSavingId] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'data', direction: 'desc' });
-  const [selectedAgent, setSelectedAgent] = useState("ALL"); // Filtro do Gestor
+  const [selectedAgent, setSelectedAgent] = useState("ALL");
 
   const t = dark ? tokens.dark : tokens.light;
 
@@ -148,8 +154,6 @@ export default function CsatApp() {
     let mounted = true;
     (async () => {
       setLoading(true);
-      
-      // GESTOR puxa TODOS os dados da base. OPERADOR puxa SÓ os dele.
       let query = supabase.from('atendimentos').select('*').order('criado_em', { ascending: false });
       if (!ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
         query = query.eq('atendente', session.user.email);
@@ -199,7 +203,6 @@ export default function CsatApp() {
     setTimeout(() => setSavingId(null), 1000);
   };
 
-  // --- FILTROS DE EXIBIÇÃO (BASEADOS NO ACESSO) ---
   const agentsList = useMemo(() => {
     if (!isAdmin) return [];
     const uniqueAgents = [...new Set(allRecords.map(r => r.atendente))];
@@ -210,10 +213,9 @@ export default function CsatApp() {
     if (isAdmin && selectedAgent !== "ALL") {
       return allRecords.filter(r => r.atendente === selectedAgent);
     }
-    return allRecords; // Se for operador comum ou Gestor em "Visão Geral", exibe a base atual
+    return allRecords;
   }, [allRecords, isAdmin, selectedAgent]);
 
-  // --- CÁLCULO TOP BOX (Notas 4 e 5) ---
   const myPct = useMemo(() => {
     const validRecords = displayRecords.filter(r => {
       const n = Number(r.avaliacao);
@@ -347,7 +349,6 @@ export default function CsatApp() {
       <style>{FONTS}</style>
       <div className="min-h-full w-full max-w-7xl mx-auto p-4 sm:p-8">
         
-        {/* Cabeçalho */}
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-12 w-full px-6 py-4 rounded-2xl border shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <div className="p-2 rounded-xl transition-colors duration-300 flex-shrink-0" style={{ backgroundColor: t.accentSoft }}>
@@ -357,7 +358,6 @@ export default function CsatApp() {
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
             
-            {/* NOVO: Menu do Administrador para Filtragel */}
             {isAdmin && (
               <div className="flex items-center gap-2 border px-3 py-2 rounded-xl" style={{ backgroundColor: t.panel2, borderColor: t.border }}>
                 <Shield size={16} color={t.warn} />
@@ -395,11 +395,9 @@ export default function CsatApp() {
         ) : (
           <div className="w-full">
             
-            {/* TELA INICIAL */}
             {view === "dashboard" && (
               <div className="flex flex-col lg:flex-row gap-12 w-full animate-in fade-in duration-500">
                 
-                {/* Coluna Esquerda: Textos */}
                 <div className="flex flex-col flex-1 gap-6 justify-center">
                   <h2 className="text-3xl sm:text-4xl font-bold mb-2" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                     {isAdmin && selectedAgent === "ALL" ? "Painel da Equipe" : "Painel de performance"}
@@ -422,7 +420,6 @@ export default function CsatApp() {
                   </div>
                 </div>
 
-                {/* Coluna Direita: Gráfico e Botão */}
                 <div className="flex flex-col flex-[1.5] gap-6 items-center">
                   <div className="w-full border rounded-[2rem] p-6 shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
                     <PerformanceChart weeklyData={weeklyStats} t={t} />
@@ -439,7 +436,6 @@ export default function CsatApp() {
               </div>
             )}
 
-            {/* TELA DA TABELA */}
             {view === "list" && (
               <div className="w-full animate-in fade-in duration-300">
                 <div className="flex items-center justify-between mb-4">
