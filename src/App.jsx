@@ -9,9 +9,9 @@ const BACKGROUND_URL = "https://i.postimg.cc/fT3Trm2M/Template-apresentacao-i-Gr
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const GOAL = 95;
-const TEAM_AVERAGE = 82.93; 
 const DEFAULT_PASSWORD = "iGreen@2026";
 
+// COLOQUE OS E-MAILS DE GESTORES AQUI
 const ADMIN_EMAILS = [
   "mateus.silva@igreenenergy.com.br",
   "gestor@igreenenergy.com.br"
@@ -31,7 +31,8 @@ const tokens = {
   dark: { bg: "#0B1412", panel: "#101E1B", panel2: "#152420", text: "#EAF3EE", textSoft: "#93A69D", border: "#1F332C", accent: "#35D07F", accentSoft: "#12281F", warn: "#E8B94A", danger: "#E17163", needle: "#EAF3EE" },
 };
 
-function PerformanceChart({ weeklyData, t }) {
+// COMPONENTE 1: Gráfico de Linha (Desempenho Semanal)
+function PerformanceChart({ weeklyData, t, teamAvg }) {
   const width = 500;
   const height = 250;
   const paddingX = 50;
@@ -41,7 +42,7 @@ function PerformanceChart({ weeklyData, t }) {
   const chartH = height - paddingY * 2;
 
   const goalY = paddingY + chartH - ((GOAL / 100) * chartH);
-  const avgY = paddingY + chartH - ((TEAM_AVERAGE / 100) * chartH); 
+  const avgY = paddingY + chartH - ((teamAvg / 100) * chartH); 
 
   const xStep = chartW / 3;
   const points = weeklyData.map((w, i) => {
@@ -55,31 +56,33 @@ function PerformanceChart({ weeklyData, t }) {
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
+      {/* Eixos */}
       <line x1={paddingX} y1={paddingY - 10} x2={paddingX} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
       <line x1={paddingX} y1={height - paddingY} x2={width - paddingX + 10} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
 
+      {/* Linha Média da Equipe (Dinâmica) */}
       <line x1={paddingX} y1={avgY} x2={width - paddingX + 10} y2={avgY} stroke={t.textSoft} strokeWidth="2" strokeDasharray="4,4" opacity="0.6" />
-      <text x={width - paddingX + 18} y={avgY + 4} fill={t.textSoft} fontSize="11" fontWeight="600" style={{ fontFamily: "'Montserrat', sans-serif" }}>Média</text>
+      <text x={width - paddingX + 18} y={avgY + 4} fill={t.textSoft} fontSize="11" fontWeight="600" style={{ fontFamily: "'Montserrat', sans-serif" }}>Média ({fmtPct(teamAvg)})</text>
 
+      {/* Linha da Meta */}
       <line x1={paddingX} y1={goalY} x2={width - paddingX + 10} y2={goalY} stroke={t.warn} strokeWidth="2" strokeDasharray="6,6" />
-      <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>95%</text>
+      <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>Meta 95%</text>
 
+      {/* Linha de Conexão */}
       {validPoints.length > 1 && (
         <path d={pathD} fill="none" stroke={t.accent} strokeWidth="3" opacity="0.5" />
       )}
 
+      {/* Pontos */}
       {points.map((p, i) => (
         <g key={i}>
           <text x={p.x} y={height - paddingY + 20} textAnchor="middle" fontSize="11" fill={t.textSoft} fontWeight="600" style={{ fontFamily: "'Inter', sans-serif" }}>{p.name}</text>
           <text x={p.x} y={height - paddingY + 34} textAnchor="middle" fontSize="9" fill={t.textSoft} opacity="0.7" style={{ fontFamily: "'Inter', sans-serif" }}>{p.label}</text>
-          
           {p.hasData && (
             <>
               <circle cx={p.x} cy={p.y} r="6" fill={t.accent} />
               <circle cx={p.x} cy={p.y} r="3" fill={t.bg} />
-              <text x={p.x} y={p.y - 12} textAnchor="middle" fontSize="13" fill={t.text} fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                {fmtPct(p.pct)}
-              </text>
+              <text x={p.x} y={p.y - 12} textAnchor="middle" fontSize="13" fill={t.text} fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>{fmtPct(p.pct)}</text>
             </>
           )}
         </g>
@@ -88,29 +91,66 @@ function PerformanceChart({ weeklyData, t }) {
   );
 }
 
-// FORMATADOR DE DATA 100% BLINDADO
+// COMPONENTE 2: Gráfico de Barras de Ranking (Admin)
+function TeamBarChart({ data, t, goal, teamAvg }) {
+  const width = Math.max(600, data.length * 80 + 100);
+  const height = 280;
+  const paddingX = 50;
+  const paddingY = 40;
+
+  const chartW = width - paddingX * 2;
+  const chartH = height - paddingY * 2;
+
+  const goalY = paddingY + chartH - ((goal / 100) * chartH);
+  const avgY = paddingY + chartH - ((teamAvg / 100) * chartH);
+
+  const step = chartW / Math.max(data.length, 1);
+  const barWidth = Math.min(40, step * 0.6);
+
+  return (
+    <div className="w-full overflow-x-auto pb-2">
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto min-w-[600px] overflow-visible">
+        <line x1={paddingX} y1={paddingY - 10} x2={paddingX} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
+        <line x1={paddingX} y1={height - paddingY} x2={width - paddingX + 10} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
+
+        <line x1={paddingX} y1={avgY} x2={width - paddingX + 10} y2={avgY} stroke={t.textSoft} strokeWidth="2" strokeDasharray="4,4" opacity="0.6" />
+        <text x={width - paddingX + 18} y={avgY + 4} fill={t.textSoft} fontSize="11" fontWeight="600" style={{ fontFamily: "'Montserrat', sans-serif" }}>Média</text>
+
+        <line x1={paddingX} y1={goalY} x2={width - paddingX + 10} y2={goalY} stroke={t.warn} strokeWidth="2" strokeDasharray="6,6" />
+        <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>Meta 95%</text>
+
+        {data.map((d, i) => {
+          const x = paddingX + (i * step) + (step / 2) - (barWidth / 2);
+          const barH = (d.pct / 100) * chartH;
+          const y = paddingY + chartH - barH;
+          return (
+            <g key={i}>
+              <rect x={x} y={y} width={barWidth} height={barH} fill={d.pct >= goal ? t.accent : t.warn} rx="4" opacity="0.9" />
+              <text x={x + barWidth / 2} y={y - 8} textAnchor="middle" fill={t.text} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>{fmtPct(d.pct)}</text>
+              <text x={x + barWidth / 2} y={height - paddingY + 20} textAnchor="middle" fill={t.textSoft} fontSize="11" style={{ fontFamily: "'Inter', sans-serif" }}>{d.name}</text>
+              <text x={x + barWidth / 2} y={height - paddingY + 34} textAnchor="middle" fill={t.textSoft} fontSize="9" opacity="0.7" style={{ fontFamily: "'Inter', sans-serif" }}>{d.total} av</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 const getMetrificationWeek = (dateString) => {
   if (!dateString) return null;
-  
   let d, m, y;
-  const cleanDate = dateString.split('T')[0].split(' ')[0]; // Garante que só peguemos "YYYY-MM-DD"
-
-  if (cleanDate.includes('/')) {
-    [d, m, y] = cleanDate.split('/');
-  } else if (cleanDate.includes('-')) {
-    [y, m, d] = cleanDate.split('-');
-  } else {
-    return null;
-  }
+  const cleanDate = dateString.split('T')[0].split(' ')[0];
+  if (cleanDate.includes('/')) [d, m, y] = cleanDate.split('/');
+  else if (cleanDate.includes('-')) [y, m, d] = cleanDate.split('-');
+  else return null;
 
   const month = parseInt(m, 10);
   const day = parseInt(d, 10);
-
   if ((month === 7 && day >= 26) || (month === 8 && day <= 2)) return 1;
   if (month === 8 && day >= 3 && day <= 10) return 2;
   if (month === 8 && day >= 11 && day <= 18) return 3;
   if (month === 8 && day >= 19 && day <= 25) return 4;
-  
   return null;
 };
 
@@ -118,12 +158,10 @@ export default function CsatApp() {
   const [dark, setDark] = useState(true);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
-  
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
-  
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
@@ -153,8 +191,6 @@ export default function CsatApp() {
       return;
     }
     let mounted = true;
-    
-    // --- NOVO SISTEMA DE PAGINAÇÃO (BYPASS DO LIMITE DE 1000 LINHAS) ---
     (async () => {
       setLoading(true);
       let allFetchedData = [];
@@ -163,33 +199,20 @@ export default function CsatApp() {
       let hasMore = true;
 
       while (hasMore) {
-        let query = supabase.from('atendimentos')
-          .select('*')
-          .gte('data', '2026-07-25') // Otimiza a busca para pegar apenas o ciclo atual do banco
-          .lte('data', '2026-08-31') 
-          .order('criado_em', { ascending: false })
-          .range(from, from + step - 1); // Paginação
-          
+        let query = supabase.from('atendimentos').select('*').gte('data', '2026-07-25').lte('data', '2026-08-31').order('criado_em', { ascending: false }).range(from, from + step - 1);
         if (!ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
           query = query.eq('atendente', session.user.email);
         }
-        
         const { data, error } = await query;
-
-        if (error) {
-          console.error("Erro ao buscar dados:", error);
-          break;
-        }
-
+        if (error) break;
         if (data && data.length > 0) {
           allFetchedData = [...allFetchedData, ...data];
           from += step;
-          if (data.length < step) hasMore = false; // Se vieram menos de 1000, acabou
+          if (data.length < step) hasMore = false;
         } else {
           hasMore = false;
         }
       }
-
       if (mounted) {
         setAllRecords(allFetchedData);
         setLoading(false);
@@ -237,29 +260,50 @@ export default function CsatApp() {
 
   const agentsList = useMemo(() => {
     if (!isAdmin) return [];
-    const uniqueAgents = [...new Set(allRecords.map(r => r.atendente))];
-    return uniqueAgents.filter(Boolean).sort();
+    return [...new Set(allRecords.map(r => r.atendente))].filter(Boolean).sort();
   }, [allRecords, isAdmin]);
 
   const displayRecords = useMemo(() => {
-    if (isAdmin && selectedAgent !== "ALL") {
-      return allRecords.filter(r => r.atendente === selectedAgent);
-    }
+    if (isAdmin && selectedAgent !== "ALL") return allRecords.filter(r => r.atendente === selectedAgent);
     return allRecords;
   }, [allRecords, isAdmin, selectedAgent]);
 
+  // CÁLCULO GERAL DINÂMICO
   const myPct = useMemo(() => {
-    const validRecords = displayRecords.filter(r => {
-      const n = Number(r.avaliacao);
-      return !isNaN(n) && n > 0;
-    });
-    if (validRecords.length === 0) return 0;
-    const positiveRecords = validRecords.filter(r => {
-      const n = Number(r.avaliacao);
-      return n === 4 || n === 5;
-    });
-    return (positiveRecords.length / validRecords.length) * 100;
+    const valid = displayRecords.filter(r => !isNaN(Number(r.avaliacao)) && Number(r.avaliacao) > 0);
+    if (!valid.length) return 0;
+    const pos = valid.filter(r => Number(r.avaliacao) >= 4);
+    return (pos.length / valid.length) * 100;
   }, [displayRecords]);
+
+  // MÉDIA DINÂMICA DA EQUIPE COMPLETA (Para renderizar no gráfico)
+  const liveTeamAvg = useMemo(() => {
+    if (!isAdmin) return 82.93; // Operador comum vê número base para segurança
+    const valid = allRecords.filter(r => !isNaN(Number(r.avaliacao)) && Number(r.avaliacao) > 0);
+    if (!valid.length) return 0;
+    const pos = valid.filter(r => Number(r.avaliacao) >= 4);
+    return (pos.length / valid.length) * 100;
+  }, [allRecords, isAdmin]);
+
+  // AGREGAÇÃO PARA O NOVO GRÁFICO DE BARRAS (ADMIN ONLY)
+  const agentsStats = useMemo(() => {
+    if (!isAdmin || selectedAgent !== "ALL") return [];
+    const stats = {};
+    allRecords.forEach(r => {
+      const agent = r.atendente;
+      if (!stats[agent]) stats[agent] = { total: 0, positive: 0 };
+      const val = Number(r.avaliacao);
+      if (!isNaN(val) && val > 0) {
+        stats[agent].total += 1;
+        if (val === 4 || val === 5) stats[agent].positive += 1;
+      }
+    });
+    return Object.entries(stats).filter(([_, d]) => d.total > 0).map(([agent, d]) => ({
+      name: agent.split('@')[0],
+      pct: (d.positive / d.total) * 100,
+      total: d.total
+    })).sort((a, b) => b.pct - a.pct); // Do maior para o menor C-SAT
+  }, [allRecords, isAdmin, selectedAgent]);
 
   const weeklyStats = useMemo(() => {
     const stats = {
@@ -268,32 +312,14 @@ export default function CsatApp() {
       3: { name: "3ª Semana", label: "11/08 a 18/08", items: [] },
       4: { name: "4ª Semana", label: "19/08 a 25/08", items: [] },
     };
-
     displayRecords.forEach(r => {
       const weekId = getMetrificationWeek(r.data);
-      if (weekId && stats[weekId]) {
-        stats[weekId].items.push(r);
-      }
+      if (weekId && stats[weekId]) stats[weekId].items.push(r);
     });
-
     return Object.values(stats).map(w => {
-      const validInWeek = w.items.filter(r => {
-        const n = Number(r.avaliacao);
-        return !isNaN(n) && n > 0;
-      });
-      const positiveInWeek = validInWeek.filter(r => {
-        const n = Number(r.avaliacao);
-        return n === 4 || n === 5;
-      });
-      const pct = validInWeek.length > 0 ? (positiveInWeek.length / validInWeek.length) * 100 : 0;
-
-      return { 
-        name: w.name, 
-        label: w.label,
-        total: validInWeek.length, 
-        pct: pct,
-        hasData: validInWeek.length > 0
-      };
+      const valid = w.items.filter(r => !isNaN(Number(r.avaliacao)) && Number(r.avaliacao) > 0);
+      const pos = valid.filter(r => Number(r.avaliacao) >= 4);
+      return { name: w.name, label: w.label, total: valid.length, pct: valid.length > 0 ? (pos.length / valid.length) * 100 : 0, hasData: valid.length > 0 };
     });
   }, [displayRecords]);
 
@@ -345,38 +371,10 @@ export default function CsatApp() {
     );
   }
 
-  if (needsPasswordChange) {
-    return (
-      <div className="fixed inset-0 overflow-y-auto flex flex-col items-center justify-center p-6 bg-[#0A0A0A]" style={{ backgroundImage: `url('${BACKGROUND_URL}')`, backgroundSize: 'cover', backgroundPosition: 'left', fontFamily: "'Inter', sans-serif" }}>
-        <style>{FONTS}</style>
-        <div className="w-full max-w-md rounded-3xl border border-white/20 bg-black/60 backdrop-blur-md p-10 shadow-2xl">
-          <h2 className="text-xl font-bold mb-2 text-white text-center" style={{ fontFamily: "'Montserrat', sans-serif" }}>Defina sua Senha Pessoal</h2>
-          <p className="text-sm text-gray-300 text-center mb-8">Como este é o seu primeiro acesso, crie uma senha segura.</p>
-          <form onSubmit={handlePasswordChange} className="space-y-5">
-            <input type="password" placeholder="Nova senha" required value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-[#1F9D6B]" />
-            <input type="password" placeholder="Confirmar nova senha" required value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-[#1F9D6B]" />
-            {authError && <div className="text-red-400 text-sm text-center">{authError}</div>}
-            <button type="submit" disabled={authLoading} className="w-full py-3 bg-[#1F9D6B] text-white rounded-xl font-bold hover:bg-[#188057] flex justify-center items-center">
-              {authLoading ? <Loader2 size={18} className="animate-spin" /> : "Salvar nova senha"}
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div 
       className="fixed inset-0 overflow-y-auto transition-colors duration-300" 
-      style={{ 
-        backgroundColor: t.bg, 
-        backgroundImage: `url('${BACKGROUND_URL}')`, 
-        backgroundSize: 'cover', 
-        backgroundPosition: 'left', 
-        backgroundAttachment: 'fixed',
-        color: t.text,
-        fontFamily: "'Inter', sans-serif"
-      }}
+      style={{ backgroundColor: t.bg, backgroundImage: `url('${BACKGROUND_URL}')`, backgroundSize: 'cover', backgroundPosition: 'left', backgroundAttachment: 'fixed', color: t.text, fontFamily: "'Inter', sans-serif" }}
     >
       <style>{FONTS}</style>
       <div className="min-h-full w-full max-w-7xl mx-auto p-4 sm:p-8">
@@ -389,20 +387,12 @@ export default function CsatApp() {
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
-            
             {isAdmin && (
               <div className="flex items-center gap-2 border px-3 py-2 rounded-xl" style={{ backgroundColor: t.panel2, borderColor: t.border }}>
                 <Shield size={16} color={t.warn} />
-                <select 
-                  value={selectedAgent} 
-                  onChange={(e) => setSelectedAgent(e.target.value)}
-                  className="bg-transparent text-sm font-semibold outline-none cursor-pointer"
-                  style={{ color: t.text }}
-                >
+                <select value={selectedAgent} onChange={(e) => setSelectedAgent(e.target.value)} className="bg-transparent text-sm font-semibold outline-none cursor-pointer" style={{ color: t.text }}>
                   <option value="ALL">Visão Geral (Equipe)</option>
-                  {agentsList.map(agent => (
-                    <option key={agent} value={agent}>{agent}</option>
-                  ))}
+                  {agentsList.map(agent => <option key={agent} value={agent}>{agent}</option>)}
                 </select>
               </div>
             )}
@@ -428,42 +418,52 @@ export default function CsatApp() {
           <div className="w-full">
             
             {view === "dashboard" && (
-              <div className="flex flex-col lg:flex-row gap-12 w-full animate-in fade-in duration-500">
+              <div className="flex flex-col lg:flex-row gap-12 w-full animate-in fade-in duration-500 items-start">
                 
-                <div className="flex flex-col flex-1 gap-6 justify-center">
+                {/* LADO ESQUERDO (Fixado no topo para descer com o scroll caso os gráficos fiquem grandes) */}
+                <div className="flex flex-col flex-1 gap-6 sticky top-8">
                   <h2 className="text-3xl sm:text-4xl font-bold mb-2" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                    {isAdmin && selectedAgent === "ALL" ? "Painel da Equipe" : "Painel de performance"}
+                    {isAdmin && selectedAgent === "ALL" ? "Painel da Equipe" : "Painel de Performance"}
                   </h2>
                   
                   <div className="flex flex-col gap-1">
                     <div className="text-xl flex items-center gap-2">
-                      <span className="w-44 transition-colors duration-300 font-medium" style={{ color: t.textSoft }}>C-sat atual:</span> 
+                      <span className="w-48 transition-colors duration-300 font-medium" style={{ color: t.textSoft }}>
+                        {isAdmin && selectedAgent === "ALL" ? "C-SAT Consolidado:" : "Meu C-SAT Atual:"}
+                      </span> 
                       <span className="font-bold text-2xl transition-colors duration-300" style={{ color: myPct >= GOAL ? t.accent : t.warn, fontFamily: "'Montserrat', sans-serif" }}>
                         {fmtPct(myPct)}
                       </span>
                     </div>
                     
-                    <div className="text-xl flex items-center gap-2">
-                      <span className="w-44 transition-colors duration-300 font-medium" style={{ color: t.textSoft }}>Média da equipe:</span> 
-                      <span className="font-bold text-2xl transition-colors duration-300" style={{ color: t.text, fontFamily: "'Montserrat', sans-serif" }}>
-                        {fmtPct(TEAM_AVERAGE)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col flex-[1.5] gap-6 items-center">
-                  <div className="w-full border rounded-[2rem] p-6 shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
-                    <PerformanceChart weeklyData={weeklyStats} t={t} />
+                    {(!isAdmin || selectedAgent !== "ALL") && (
+                      <div className="text-xl flex items-center gap-2">
+                        <span className="w-48 transition-colors duration-300 font-medium" style={{ color: t.textSoft }}>Média da Equipe:</span> 
+                        <span className="font-bold text-2xl transition-colors duration-300" style={{ color: t.text, fontFamily: "'Montserrat', sans-serif" }}>
+                          {fmtPct(liveTeamAvg)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   
-                  <button 
-                    onClick={() => setView("list")} 
-                    className="px-8 py-4 rounded-xl font-bold text-white flex items-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all mt-4" 
-                    style={{ backgroundColor: t.accent, fontFamily: "'Montserrat', sans-serif" }}
-                  >
-                    <List size={18} /> Detalhar Atendimentos e Notas
+                  <button onClick={() => setView("list")} className="px-8 py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all mt-4 w-full md:w-auto" style={{ backgroundColor: t.accent, fontFamily: "'Montserrat', sans-serif" }}>
+                    <List size={18} /> Detalhar Atendimentos
                   </button>
+                </div>
+
+                {/* LADO DIREITO (Empilhando os gráficos para gestores) */}
+                <div className="flex flex-col flex-[2] gap-8 w-full">
+                  <div className="w-full border rounded-[2rem] p-6 shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
+                    <h3 className="text-center font-bold mb-6 text-lg" style={{ fontFamily: "'Montserrat', sans-serif" }}>Desempenho Semanal</h3>
+                    <PerformanceChart weeklyData={weeklyStats} t={t} teamAvg={liveTeamAvg} />
+                  </div>
+
+                  {isAdmin && selectedAgent === "ALL" && agentsStats.length > 0 && (
+                    <div className="w-full border rounded-[2rem] p-6 shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
+                      <h3 className="text-center font-bold mb-6 text-lg" style={{ fontFamily: "'Montserrat', sans-serif" }}>Ranking da Equipe (C-SAT Atual)</h3>
+                      <TeamBarChart data={agentsStats} t={t} goal={GOAL} teamAvg={liveTeamAvg} />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
