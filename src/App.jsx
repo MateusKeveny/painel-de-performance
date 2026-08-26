@@ -11,7 +11,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const GOAL = 95;
 const DEFAULT_PASSWORD = "iGreen@2026";
 
-// COLOQUE OS E-MAILS DE GESTORES AQUI
 const ADMIN_EMAILS = [
   "mateus.silva@igreenenergy.com.br",
   "gestor@igreenenergy.com.br"
@@ -147,7 +146,6 @@ const getMetrificationWeek = (dateString) => {
   return null;
 };
 
-// VALIDADOR ESTRITO (EQUIVALENTE AO CONT.SES)
 const isValidRecord = (r) => {
   if (getMetrificationWeek(r.data) === null) return false;
   const val = Number(r.avaliacao);
@@ -199,12 +197,22 @@ export default function CsatApp() {
       let hasMore = true;
 
       while (hasMore) {
-        let query = supabase.from('atendimentos').select('*').gte('data', '2026-07-25').lte('data', '2026-08-31').order('criado_em', { ascending: false }).range(from, from + step - 1);
+        // CORREÇÃO CRÍTICA DE PAGINAÇÃO: order('id') garante que nada seja pulado se os segundos forem iguais
+        let query = supabase.from('atendimentos')
+          .select('*')
+          .gte('data', '2026-07-25')
+          .lte('data', '2026-08-31')
+          .order('criado_em', { ascending: false })
+          .order('id', { ascending: true }) 
+          .range(from, from + step - 1);
+          
         if (!ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
           query = query.eq('atendente', session.user.email);
         }
+        
         const { data, error } = await query;
         if (error) break;
+        
         if (data && data.length > 0) {
           allFetchedData = [...allFetchedData, ...data];
           from += step;
@@ -268,9 +276,8 @@ export default function CsatApp() {
     return allRecords;
   }, [allRecords, isAdmin, selectedAgent]);
 
-  // --- NOVA LÓGICA DE EXCLUSÃO DE AGENTES ZERADOS ---
+  // --- NOVA LÓGICA ESPELHADA NO EXCEL (MÉDIA DAS MÉDIAS) ---
 
-  // 1. Mapeia o C-SAT de TODOS os agentes
   const allAgentsMap = useMemo(() => {
     const stats = {};
     allRecords.filter(isValidRecord).forEach(r => {
@@ -288,7 +295,7 @@ export default function CsatApp() {
     }));
   }, [allRecords]);
 
-  // 2. Filtra removendo os agentes com 0% (Média Zerada)
+  // Removemos atendentes que zeraram o CSAT (Não atingiram meta ou não tiveram chamados válidos)
   const validGlobalAgents = useMemo(() => {
     return allAgentsMap.filter(a => a.pct > 0);
   }, [allAgentsMap]);
@@ -297,17 +304,15 @@ export default function CsatApp() {
     return new Set(validGlobalAgents.map(a => a.email));
   }, [validGlobalAgents]);
 
-  // 3. Média da Equipe (Agora totalmente sem o peso morto dos zerados)
+  // 1. MÉDIA DA EQUIPE (Calcula a média do % dos operadores, igual ao Excel)
   const liveTeamAvg = useMemo(() => {
-    if (!isAdmin) return 82.93; // Operador vê número base
+    if (!isAdmin) return 82.93; 
     if (validGlobalAgents.length === 0) return 0;
     
-    const totalPos = validGlobalAgents.reduce((sum, a) => sum + a.positive, 0);
-    const totalAv = validGlobalAgents.reduce((sum, a) => sum + a.total, 0);
-    return (totalPos / totalAv) * 100;
+    const sumOfPcts = validGlobalAgents.reduce((sum, a) => sum + a.pct, 0);
+    return sumOfPcts / validGlobalAgents.length;
   }, [validGlobalAgents, isAdmin]);
 
-  // 4. Garante que os gráficos gerais também não recebam os chamados desses atendentes
   const effectiveRecords = useMemo(() => {
     if (isAdmin && selectedAgent === "ALL") {
       return displayRecords.filter(r => validEmailsSet.has(r.atendente));
@@ -315,47 +320,57 @@ export default function CsatApp() {
     return displayRecords;
   }, [displayRecords, isAdmin, selectedAgent, validEmailsSet]);
 
-  // --- FIM DA NOVA LÓGICA ---
-
-  // CÁLCULO GERAL (C-SAT Atual)
+  // 2. C-SAT CONSOLIDADO (Se for gestor olhando a equipe, mostra a Média das Médias. Se for individual, mostra o dele)
   const myPct = useMemo(() => {
+    if (isAdmin && selectedAgent === "ALL") return liveTeamAvg;
+    
     const validRecords = effectiveRecords.filter(isValidRecord);
     if (validRecords.length === 0) return 0;
     
     const positiveRecords = validRecords.filter(r => Number(r.avaliacao) >= 4);
     return (positiveRecords.length / validRecords.length) * 100;
-  }, [effectiveRecords]);
+  }, [effectiveRecords, isAdmin, selectedAgent, liveTeamAvg]);
 
-  // RANKING DA EQUIPE (Apenas com atendentes válidos)
+  // 3. RANKING (Apenas operadores com nota positiva)
   const agentsStats = useMemo(() => {
     if (!isAdmin || selectedAgent !== "ALL") return [];
     return validGlobalAgents.sort((a, b) => b.pct - a.pct);
   }, [isAdmin, selectedAgent, validGlobalAgents]);
 
-  // DESEMPENHO SEMANAL (Limpo dos zerados na Visão Geral)
+  // 4. DESEMPENHO SEMANAL (Também converte para Média das Médias por Semana)
   const weeklyStats = useMemo(() => {
     const stats = {
-      1: { name: "1ª Semana", label: "26/07 a 02/08", items: [] },
-      2: { name: "2ª Semana", label: "03/08 a 10/08", items: [] },
-      3: { name: "3ª Semana", label: "11/08 a 18/08", items: [] },
-      4: { name: "4ª Semana", label: "19/08 a 25/08", items: [] },
+      1: { name: "1ª Semana", label: "26/07 a 02/08", agents: {} },
+      2: { name: "2ª Semana", label: "03/08 a 10/08", agents: {} },
+      3: { name: "3ª Semana", label: "11/08 a 18/08", agents: {} },
+      4: { name: "4ª Semana", label: "19/08 a 25/08", agents: {} },
     };
+    
     effectiveRecords.forEach(r => {
       const weekId = getMetrificationWeek(r.data);
-      if (weekId && stats[weekId]) stats[weekId].items.push(r);
+      if (weekId && isValidRecord(r)) {
+        if (!stats[weekId].agents[r.atendente]) stats[weekId].agents[r.atendente] = { total: 0, pos: 0 };
+        stats[weekId].agents[r.atendente].total += 1;
+        if (Number(r.avaliacao) >= 4) stats[weekId].agents[r.atendente].pos += 1;
+      }
     });
+    
     return Object.values(stats).map(w => {
-      const validInWeek = w.items.filter(isValidRecord);
-      const pos = validInWeek.filter(r => Number(r.avaliacao) >= 4);
-      return { 
-        name: w.name, 
-        label: w.label, 
-        total: validInWeek.length, 
-        pct: validInWeek.length > 0 ? (pos.length / validInWeek.length) * 100 : 0, 
-        hasData: validInWeek.length > 0 
-      };
+      const agentsInWeek = Object.values(w.agents);
+      let weekPct = 0;
+      
+      if (agentsInWeek.length > 0) {
+         // Soma o percentual atingido por cada operador na semana e divide pelo número de operadores
+         const sumPcts = agentsInWeek.reduce((sum, a) => sum + ((a.pos / a.total) * 100), 0);
+         weekPct = sumPcts / agentsInWeek.length;
+      }
+      
+      const totalCalls = agentsInWeek.reduce((sum, a) => sum + a.total, 0);
+      return { name: w.name, label: w.label, total: totalCalls, pct: weekPct, hasData: totalCalls > 0 };
     });
   }, [effectiveRecords]);
+
+  // --- FIM DA LÓGICA ESPELHADA ---
 
   const handleSort = (key) => {
     setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
