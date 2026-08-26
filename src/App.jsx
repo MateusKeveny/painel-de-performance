@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Moon, Sun, LogOut, User, Loader2, List, ArrowLeft, CheckCircle2, Lock, Mail, ArrowUpDown } from "lucide-react";
+import { Moon, Sun, LogOut, User, Loader2, List, ArrowLeft, CheckCircle2, Lock, Mail, ArrowUpDown, Shield } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = "https://uahkplwssonbxzydjytb.supabase.co";
@@ -12,9 +12,14 @@ const GOAL = 95;
 const TEAM_AVERAGE = 82.93; // Média atual consolidada da equipe
 const DEFAULT_PASSWORD = "iGreen@2026";
 
-// Importação das fontes restaurada
+// COLOQUE AQUI OS E-MAILS DOS GESTORES (Eles terão acesso a tudo)
+const ADMIN_EMAILS = [
+  "mateus.silva@igreenenergy.com.br",
+  "gestor@igreenenergy.com.br"
+];
+
 const FONTS = `
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
 `;
 
 function fmtPct(n) {
@@ -38,8 +43,8 @@ function PerformanceChart({ weeklyData, t }) {
   const chartH = height - paddingY * 2;
 
   const goalY = paddingY + chartH - ((GOAL / 100) * chartH);
+  const avgY = paddingY + chartH - ((TEAM_AVERAGE / 100) * chartH); // Posição Y da média da equipe
 
-  // Calcula a posição dos 4 pontos (Semanas)
   const xStep = chartW / 3;
   const points = weeklyData.map((w, i) => {
     const x = paddingX + (i * xStep);
@@ -47,38 +52,39 @@ function PerformanceChart({ weeklyData, t }) {
     return { x, y, pct: w.pct, name: w.name, label: w.label, hasData: w.hasData };
   });
 
-  // Cria a linha conectando apenas os pontos que possuem dados válidos
   const validPoints = points.filter(p => p.hasData);
   const pathD = validPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(" ");
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
-      {/* Eixos (X e Y) */}
+      {/* Eixos */}
       <line x1={paddingX} y1={paddingY - 10} x2={paddingX} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
       <line x1={paddingX} y1={height - paddingY} x2={width - paddingX + 10} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
 
+      {/* Linha da Média da Equipe (Cinza/Neutra) */}
+      <line x1={paddingX} y1={avgY} x2={width - paddingX + 10} y2={avgY} stroke={t.textSoft} strokeWidth="2" strokeDasharray="4,4" opacity="0.6" />
+      <text x={width - paddingX + 18} y={avgY + 4} fill={t.textSoft} fontSize="11" fontWeight="600" style={{ fontFamily: "'Montserrat', sans-serif" }}>Média</text>
+
       {/* Linha da Meta 95% (Amarela/Aviso) */}
       <line x1={paddingX} y1={goalY} x2={width - paddingX + 10} y2={goalY} stroke={t.warn} strokeWidth="2" strokeDasharray="6,6" />
-      <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Inter', sans-serif" }}>95%</text>
+      <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>95%</text>
 
       {/* Linha de Conexão dos Resultados (Verde) */}
       {validPoints.length > 1 && (
         <path d={pathD} fill="none" stroke={t.accent} strokeWidth="3" opacity="0.5" />
       )}
 
-      {/* Pontos de Dados e Legendas */}
+      {/* Pontos de Dados */}
       {points.map((p, i) => (
         <g key={i}>
-          {/* Nome da Semana no Eixo X */}
           <text x={p.x} y={height - paddingY + 20} textAnchor="middle" fontSize="11" fill={t.textSoft} fontWeight="600" style={{ fontFamily: "'Inter', sans-serif" }}>{p.name}</text>
           <text x={p.x} y={height - paddingY + 34} textAnchor="middle" fontSize="9" fill={t.textSoft} opacity="0.7" style={{ fontFamily: "'Inter', sans-serif" }}>{p.label}</text>
           
-          {/* Ponto e Valor */}
           {p.hasData && (
             <>
               <circle cx={p.x} cy={p.y} r="6" fill={t.accent} />
               <circle cx={p.x} cy={p.y} r="3" fill={t.bg} />
-              <text x={p.x} y={p.y - 12} textAnchor="middle" fontSize="13" fill={t.text} fontWeight="bold" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+              <text x={p.x} y={p.y - 12} textAnchor="middle" fontSize="13" fill={t.text} fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                 {fmtPct(p.pct)}
               </text>
             </>
@@ -89,7 +95,6 @@ function PerformanceChart({ weeklyData, t }) {
   );
 }
 
-// Identificador de Ciclos de Metrificação (Semanas Específicas)
 const getMetrificationWeek = (dateString) => {
   if (!dateString) return null;
   const [y, m, d] = dateString.split(' ')[0].split('-');
@@ -105,19 +110,29 @@ export default function CsatApp() {
   const [dark, setDark] = useState(true);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
+  
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [records, setRecords] = useState([]);
+  
+  // VARIÁVEIS GLOBAIS DE DADOS
+  const [allRecords, setAllRecords] = useState([]);
   const [view, setView] = useState("dashboard");
   const [savingId, setSavingId] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'data', direction: 'desc' });
+  const [selectedAgent, setSelectedAgent] = useState("ALL"); // Filtro do Gestor
 
   const t = dark ? tokens.dark : tokens.light;
+
+  const isAdmin = useMemo(() => {
+    if (!session?.user?.email) return false;
+    return ADMIN_EMAILS.includes(session.user.email.toLowerCase());
+  }, [session]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
@@ -133,8 +148,15 @@ export default function CsatApp() {
     let mounted = true;
     (async () => {
       setLoading(true);
-      const { data } = await supabase.from('atendimentos').select('*').eq('atendente', session.user.email).order('criado_em', { ascending: false });
-      if (mounted && data) setRecords(data);
+      
+      // GESTOR puxa TODOS os dados da base. OPERADOR puxa SÓ os dele.
+      let query = supabase.from('atendimentos').select('*').order('criado_em', { ascending: false });
+      if (!ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
+        query = query.eq('atendente', session.user.email);
+      }
+      
+      const { data } = await query;
+      if (mounted && data) setAllRecords(data);
       if (mounted) setLoading(false);
     })();
     return () => (mounted = false);
@@ -145,7 +167,7 @@ export default function CsatApp() {
     setAuthLoading(true);
     setAuthError("");
     const { error } = await supabase.auth.signInWithPassword({ email: emailInput.trim(), password: passwordInput });
-    if (error) setAuthError(error.message);
+    if (error) setAuthError("E-mail ou senha inválidos.");
     else if (passwordInput === DEFAULT_PASSWORD) setNeedsPasswordChange(true);
     setAuthLoading(false);
   };
@@ -167,17 +189,33 @@ export default function CsatApp() {
     setNeedsPasswordChange(false);
     setEmailInput("");
     setPasswordInput("");
+    setSelectedAgent("ALL");
   };
 
   const saveRetorno = async (id, newValue) => {
     setSavingId(id);
     await supabase.from('atendimentos').update({ protocolo_retorno: newValue }).eq('id', id);
+    setAllRecords(prev => prev.map(r => r.id === id ? { ...r, protocolo_retorno: newValue } : r));
     setTimeout(() => setSavingId(null), 1000);
   };
 
-  // CÁLCULO TOP BOX EXATO (Geral)
+  // --- FILTROS DE EXIBIÇÃO (BASEADOS NO ACESSO) ---
+  const agentsList = useMemo(() => {
+    if (!isAdmin) return [];
+    const uniqueAgents = [...new Set(allRecords.map(r => r.atendente))];
+    return uniqueAgents.filter(Boolean).sort();
+  }, [allRecords, isAdmin]);
+
+  const displayRecords = useMemo(() => {
+    if (isAdmin && selectedAgent !== "ALL") {
+      return allRecords.filter(r => r.atendente === selectedAgent);
+    }
+    return allRecords; // Se for operador comum ou Gestor em "Visão Geral", exibe a base atual
+  }, [allRecords, isAdmin, selectedAgent]);
+
+  // --- CÁLCULO TOP BOX (Notas 4 e 5) ---
   const myPct = useMemo(() => {
-    const validRecords = records.filter(r => {
+    const validRecords = displayRecords.filter(r => {
       const n = Number(r.avaliacao);
       return !isNaN(n) && n > 0;
     });
@@ -187,9 +225,8 @@ export default function CsatApp() {
       return n === 4 || n === 5;
     });
     return (positiveRecords.length / validRecords.length) * 100;
-  }, [records]);
+  }, [displayRecords]);
 
-  // CÁLCULO TOP BOX EXATO (Por Semana Fixa)
   const weeklyStats = useMemo(() => {
     const stats = {
       1: { name: "1ª Semana", label: "26/07 a 02/08", items: [] },
@@ -198,7 +235,7 @@ export default function CsatApp() {
       4: { name: "4ª Semana", label: "19/08 a 25/08", items: [] },
     };
 
-    records.forEach(r => {
+    displayRecords.forEach(r => {
       const weekId = getMetrificationWeek(r.data);
       if (weekId && stats[weekId]) {
         stats[weekId].items.push(r);
@@ -224,14 +261,14 @@ export default function CsatApp() {
         hasData: validInWeek.length > 0
       };
     });
-  }, [records]);
+  }, [displayRecords]);
 
   const handleSort = (key) => {
     setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
   };
 
   const sortedRecords = useMemo(() => {
-    return [...records].sort((a, b) => {
+    return [...displayRecords].sort((a, b) => {
       let aVal = a[sortConfig.key], bVal = b[sortConfig.key];
       if (sortConfig.key === 'avaliacao' || sortConfig.key === 'protocolo') {
         aVal = Number(aVal) || 0; bVal = Number(bVal) || 0;
@@ -240,9 +277,8 @@ export default function CsatApp() {
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [records, sortConfig]);
+  }, [displayRecords, sortConfig]);
 
-  // TELA DE LOGIN
   if (!session) {
     return (
       <div className="fixed inset-0 overflow-y-auto flex flex-col items-center justify-center p-6 bg-[#0A0A0A]" style={{ backgroundImage: `url('${BACKGROUND_URL}')`, backgroundSize: 'cover', backgroundPosition: 'left', fontFamily: "'Inter', sans-serif" }}>
@@ -275,7 +311,6 @@ export default function CsatApp() {
     );
   }
 
-  // TELA DE TROCA DE SENHA OBRIGATÓRIA
   if (needsPasswordChange) {
     return (
       <div className="fixed inset-0 overflow-y-auto flex flex-col items-center justify-center p-6 bg-[#0A0A0A]" style={{ backgroundImage: `url('${BACKGROUND_URL}')`, backgroundSize: 'cover', backgroundPosition: 'left', fontFamily: "'Inter', sans-serif" }}>
@@ -296,7 +331,6 @@ export default function CsatApp() {
     );
   }
 
-  // PAINEL PRINCIPAL (Com Fundo de Imagem + Fontes Corrigidas)
   return (
     <div 
       className="fixed inset-0 overflow-y-auto transition-colors duration-300" 
@@ -320,12 +354,32 @@ export default function CsatApp() {
               <img src="https://igreenenergy.com.br/wp-content/uploads/2023/11/logo_igreen-1-e1704289874457.png" alt="iGreen Logo" className="h-8 object-contain" onError={(e) => e.target.style.display='none'} />
             </div>
           </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
+            
+            {/* NOVO: Menu do Administrador para Filtragel */}
+            {isAdmin && (
+              <div className="flex items-center gap-2 border px-3 py-2 rounded-xl" style={{ backgroundColor: t.panel2, borderColor: t.border }}>
+                <Shield size={16} color={t.warn} />
+                <select 
+                  value={selectedAgent} 
+                  onChange={(e) => setSelectedAgent(e.target.value)}
+                  className="bg-transparent text-sm font-semibold outline-none cursor-pointer"
+                  style={{ color: t.text }}
+                >
+                  <option value="ALL">Visão Geral (Equipe)</option>
+                  {agentsList.map(agent => (
+                    <option key={agent} value={agent}>{agent}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <button onClick={() => setDark(!dark)} className="p-2.5 rounded-xl transition-colors duration-300 hover:opacity-80" style={{ backgroundColor: t.panel2, color: t.text }}>
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <div className="border text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 transition-colors duration-300" style={{ backgroundColor: t.panel2, color: t.textSoft, borderColor: t.border, fontFamily: "'JetBrains Mono', monospace" }}>
-              <User size={16} /> {session.user.email}
+            <div className="border text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 transition-colors duration-300" style={{ backgroundColor: t.panel2, color: t.textSoft, borderColor: t.border }}>
+              <User size={16} /> {session.user.email.split('@')[0]}
             </div>
             <button onClick={handleLogout} className="p-2.5 rounded-xl text-white hover:opacity-80 transition-colors duration-300 flex-shrink-0" style={{ backgroundColor: t.danger }} title="Sair">
               <LogOut size={18} />
@@ -347,19 +401,21 @@ export default function CsatApp() {
                 
                 {/* Coluna Esquerda: Textos */}
                 <div className="flex flex-col flex-1 gap-6 justify-center">
-                  <h2 className="text-3xl sm:text-4xl font-bold mb-2" style={{ fontFamily: "'Montserrat', sans-serif" }}>Painel de performance</h2>
+                  <h2 className="text-3xl sm:text-4xl font-bold mb-2" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                    {isAdmin && selectedAgent === "ALL" ? "Painel da Equipe" : "Painel de performance"}
+                  </h2>
                   
                   <div className="flex flex-col gap-1">
                     <div className="text-xl flex items-center gap-2">
                       <span className="w-44 transition-colors duration-300 font-medium" style={{ color: t.textSoft }}>C-sat atual:</span> 
-                      <span className="font-bold text-2xl transition-colors duration-300" style={{ color: myPct >= GOAL ? t.accent : t.warn, fontFamily: "'JetBrains Mono', monospace" }}>
+                      <span className="font-bold text-2xl transition-colors duration-300" style={{ color: myPct >= GOAL ? t.accent : t.warn, fontFamily: "'Montserrat', sans-serif" }}>
                         {fmtPct(myPct)}
                       </span>
                     </div>
                     
                     <div className="text-xl flex items-center gap-2">
                       <span className="w-44 transition-colors duration-300 font-medium" style={{ color: t.textSoft }}>Média da equipe:</span> 
-                      <span className="font-bold text-2xl transition-colors duration-300" style={{ color: t.text, fontFamily: "'JetBrains Mono', monospace" }}>
+                      <span className="font-bold text-2xl transition-colors duration-300" style={{ color: t.text, fontFamily: "'Montserrat', sans-serif" }}>
                         {fmtPct(TEAM_AVERAGE)}
                       </span>
                     </div>
@@ -377,7 +433,7 @@ export default function CsatApp() {
                     className="px-8 py-4 rounded-xl font-bold text-white flex items-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all mt-4" 
                     style={{ backgroundColor: t.accent, fontFamily: "'Montserrat', sans-serif" }}
                   >
-                    <List size={18} /> Detalhar Meus Atendimentos e Notas
+                    <List size={18} /> Detalhar Atendimentos e Notas
                   </button>
                 </div>
               </div>
@@ -390,7 +446,7 @@ export default function CsatApp() {
                   <button onClick={() => setView("dashboard")} className="px-4 py-2 border rounded-xl flex items-center gap-2 hover:opacity-80 transition-colors duration-300 font-medium" style={{ backgroundColor: t.panel, borderColor: t.border, color: t.textSoft, fontFamily: "'Montserrat', sans-serif" }}>
                     <ArrowLeft size={16} /> Voltar ao Painel
                   </button>
-                  <div className="text-sm transition-colors duration-300" style={{ color: t.textSoft }}>Exibindo <strong>{records.length}</strong> chamados</div>
+                  <div className="text-sm transition-colors duration-300" style={{ color: t.textSoft }}>Exibindo <strong>{displayRecords.length}</strong> chamados</div>
                 </div>
 
                 <div className="border rounded-2xl overflow-hidden w-full shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
@@ -398,6 +454,11 @@ export default function CsatApp() {
                     <table className="w-full text-sm text-left">
                       <thead className="border-b transition-colors duration-300" style={{ backgroundColor: t.panel2, borderColor: t.border, color: t.textSoft }}>
                         <tr>
+                          {isAdmin && selectedAgent === "ALL" && (
+                            <th className="p-4 font-semibold cursor-pointer hover:opacity-70 transition-opacity" onClick={() => handleSort('atendente')}>
+                              <div className="flex items-center gap-1">Operador <ArrowUpDown size={14} /></div>
+                            </th>
+                          )}
                           <th className="p-4 font-semibold cursor-pointer hover:opacity-70 transition-opacity" onClick={() => handleSort('protocolo')}>
                             <div className="flex items-center gap-1">Protocolo <ArrowUpDown size={14} /></div>
                           </th>
@@ -421,17 +482,22 @@ export default function CsatApp() {
 
                           return (
                             <tr key={r.id} className="border-b hover:bg-black/5 transition-colors duration-300" style={{ borderColor: t.border }}>
-                              <td className="p-4 font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{r.protocolo}</td>
+                              {isAdmin && selectedAgent === "ALL" && (
+                                <td className="p-4 font-medium opacity-80">{r.atendente.split('@')[0]}</td>
+                              )}
+                              <td className="p-4 font-medium" style={{ fontFamily: "'Montserrat', sans-serif" }}>{r.protocolo}</td>
                               <td className="p-4 whitespace-nowrap">{r.data}</td>
                               <td className="p-4 text-center">
-                                <span className="px-3 py-1 rounded-md border font-bold text-sm" style={{ ...badgeStyle, fontFamily: "'JetBrains Mono', monospace" }}>{r.avaliacao}</span>
+                                <span className="px-3 py-1 rounded-md border font-bold text-sm" style={{ ...badgeStyle, fontFamily: "'Montserrat', sans-serif" }}>{r.avaliacao}</span>
                               </td>
                               <td className="p-4 transition-colors duration-300" style={{ color: t.textSoft }}><div className="line-clamp-2 text-xs">{r.tabulacao || "—"}</div></td>
                               <td className="p-4">
                                 <div className="relative">
                                   <input 
                                     value={r.protocolo_retorno || ""}
-                                    onChange={(e) => setRecords(records.map(rec => rec.id === r.id ? { ...rec, protocolo_retorno: e.target.value } : rec))}
+                                    onChange={(e) => {
+                                      setAllRecords(prev => prev.map(rec => rec.id === r.id ? { ...rec, protocolo_retorno: e.target.value } : rec))
+                                    }}
                                     onBlur={(e) => saveRetorno(r.id, e.target.value)}
                                     placeholder="Digite e clique fora..."
                                     className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-1 transition-colors duration-300"
@@ -447,7 +513,7 @@ export default function CsatApp() {
                     </table>
                   </div>
                   <div className="p-4 text-xs italic border-t transition-colors duration-300" style={{ borderColor: t.border, color: t.textSoft }}>
-                    * Notas 0 e -1 não impactam no seu resultado
+                    * Notas 0 e -1 não impactam no resultado
                   </div>
                 </div>
               </div>
