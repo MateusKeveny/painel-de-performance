@@ -133,10 +133,67 @@ export default function CsatApp() {
     setTimeout(() => setSavingId(null), 1000);
   };
 
-  const myPct = useMemo(() => {
-    const valid = records.filter(r => !isNaN(Number(r.avaliacao)) && Number(r.avaliacao) > 0);
-    if (!valid.length) return 0;
-    return (valid.reduce((a, r) => a + Number(r.avaliacao), 0) / (valid.length * 5)) * 100;
+const myPct = useMemo(() => {
+    // 1. Pega apenas avaliações válidas (ignora 0, -1 e vazios)
+    const validRecords = records.filter(r => {
+      const n = Number(r.avaliacao);
+      return !isNaN(n) && n > 0;
+    });
+
+    if (validRecords.length === 0) return 0;
+
+    // 2. Conta quantas dessas válidas são positivas (4 ou 5)
+    const positiveRecords = validRecords.filter(r => {
+      const n = Number(r.avaliacao);
+      return n === 4 || n === 5;
+    });
+
+    // 3. Aplica a fórmula: (Quantidade Positivas / Quantidade Total Válida) * 100
+    return (positiveRecords.length / validRecords.length) * 100;
+  }, [records]);
+
+  // Agrupamento estrito para o Gráfico com as datas do ciclo usando a NOVA LÓGICA
+  const weeklyStats = useMemo(() => {
+    const stats = {
+      1: { name: "1ª Semana", label: "26/07 a 02/08", items: [] },
+      2: { name: "2ª Semana", label: "03/08 a 10/08", items: [] },
+      3: { name: "3ª Semana", label: "11/08 a 18/08", items: [] },
+      4: { name: "4ª Semana", label: "19/08 a 25/08", items: [] },
+    };
+
+    records.forEach(r => {
+      const weekId = getMetrificationWeek(r.data);
+      if (weekId && stats[weekId]) {
+        stats[weekId].items.push(r);
+      }
+    });
+
+    return Object.values(stats).map(w => {
+      // 1. Total válido da semana
+      const validInWeek = w.items.filter(r => {
+        const n = Number(r.avaliacao);
+        return !isNaN(n) && n > 0;
+      });
+
+      // 2. Positivas da semana
+      const positiveInWeek = validInWeek.filter(r => {
+        const n = Number(r.avaliacao);
+        return n === 4 || n === 5;
+      });
+
+      // 3. Cálculo da semana
+      const pct = validInWeek.length > 0 
+        ? (positiveInWeek.length / validInWeek.length) * 100 
+        : 0;
+
+      return { 
+        name: w.name, 
+        label: w.label,
+        total: validInWeek.length, // Agora exibe o total *válido* embaixo do gráfico
+        pct: pct,
+        hasData: validInWeek.length > 0
+      };
+    });
   }, [records]);
 
   const weeklyStats = useMemo(() => {
