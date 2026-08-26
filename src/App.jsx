@@ -12,6 +12,11 @@ const GOAL = 95;
 const TEAM_AVERAGE = 82.93; // Média atual consolidada da equipe
 const DEFAULT_PASSWORD = "iGreen@2026";
 
+// Importação das fontes restaurada
+const FONTS = `
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap');
+`;
+
 function fmtPct(n) {
   if (!isFinite(n)) return "—";
   return n.toFixed(1).replace(".", ",") + "%";
@@ -54,7 +59,7 @@ function PerformanceChart({ weeklyData, t }) {
 
       {/* Linha da Meta 95% (Amarela/Aviso) */}
       <line x1={paddingX} y1={goalY} x2={width - paddingX + 10} y2={goalY} stroke={t.warn} strokeWidth="2" strokeDasharray="6,6" />
-      <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold">95%</text>
+      <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Inter', sans-serif" }}>95%</text>
 
       {/* Linha de Conexão dos Resultados (Verde) */}
       {validPoints.length > 1 && (
@@ -65,15 +70,15 @@ function PerformanceChart({ weeklyData, t }) {
       {points.map((p, i) => (
         <g key={i}>
           {/* Nome da Semana no Eixo X */}
-          <text x={p.x} y={height - paddingY + 20} textAnchor="middle" fontSize="11" fill={t.textSoft} fontWeight="600">{p.name}</text>
-          <text x={p.x} y={height - paddingY + 34} textAnchor="middle" fontSize="9" fill={t.textSoft} opacity="0.7">{p.label}</text>
+          <text x={p.x} y={height - paddingY + 20} textAnchor="middle" fontSize="11" fill={t.textSoft} fontWeight="600" style={{ fontFamily: "'Inter', sans-serif" }}>{p.name}</text>
+          <text x={p.x} y={height - paddingY + 34} textAnchor="middle" fontSize="9" fill={t.textSoft} opacity="0.7" style={{ fontFamily: "'Inter', sans-serif" }}>{p.label}</text>
           
           {/* Ponto e Valor */}
           {p.hasData && (
             <>
               <circle cx={p.x} cy={p.y} r="6" fill={t.accent} />
               <circle cx={p.x} cy={p.y} r="3" fill={t.bg} />
-              <text x={p.x} y={p.y - 12} textAnchor="middle" fontSize="13" fill={t.text} fontWeight="bold" fontFamily="monospace">
+              <text x={p.x} y={p.y - 12} textAnchor="middle" fontSize="13" fill={t.text} fontWeight="bold" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                 {fmtPct(p.pct)}
               </text>
             </>
@@ -209,9 +214,7 @@ export default function CsatApp() {
         const n = Number(r.avaliacao);
         return n === 4 || n === 5;
       });
-      const pct = validInWeek.length > 0 
-        ? (positiveInWeek.length / validInWeek.length) * 100 
-        : 0;
+      const pct = validInWeek.length > 0 ? (positiveInWeek.length / validInWeek.length) * 100 : 0;
 
       return { 
         name: w.name, 
@@ -239,11 +242,13 @@ export default function CsatApp() {
     });
   }, [records, sortConfig]);
 
+  // TELA DE LOGIN
   if (!session) {
     return (
-      <div className="fixed inset-0 overflow-y-auto flex flex-col items-center justify-center p-6 bg-[#0A0A0A]" style={{ backgroundImage: `url('${BACKGROUND_URL}')`, backgroundSize: 'cover', backgroundPosition: 'left' }}>
+      <div className="fixed inset-0 overflow-y-auto flex flex-col items-center justify-center p-6 bg-[#0A0A0A]" style={{ backgroundImage: `url('${BACKGROUND_URL}')`, backgroundSize: 'cover', backgroundPosition: 'left', fontFamily: "'Inter', sans-serif" }}>
+        <style>{FONTS}</style>
         <div className="w-full max-w-md rounded-3xl border border-white/20 bg-black/60 backdrop-blur-md p-10 shadow-2xl">
-          <h2 className="text-2xl font-bold mb-2 text-white text-center font-['Montserrat']">Gestão de Resultados</h2>
+          <h2 className="text-2xl font-bold mb-2 text-white text-center" style={{ fontFamily: "'Montserrat', sans-serif" }}>Gestão de Resultados</h2>
           <p className="text-sm text-gray-300 text-center mb-8">Faça login para ver seus resultados</p>
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
@@ -270,8 +275,42 @@ export default function CsatApp() {
     );
   }
 
+  // TELA DE TROCA DE SENHA OBRIGATÓRIA
+  if (needsPasswordChange) {
+    return (
+      <div className="fixed inset-0 overflow-y-auto flex flex-col items-center justify-center p-6 bg-[#0A0A0A]" style={{ backgroundImage: `url('${BACKGROUND_URL}')`, backgroundSize: 'cover', backgroundPosition: 'left', fontFamily: "'Inter', sans-serif" }}>
+        <style>{FONTS}</style>
+        <div className="w-full max-w-md rounded-3xl border border-white/20 bg-black/60 backdrop-blur-md p-10 shadow-2xl">
+          <h2 className="text-xl font-bold mb-2 text-white text-center" style={{ fontFamily: "'Montserrat', sans-serif" }}>Defina sua Senha Pessoal</h2>
+          <p className="text-sm text-gray-300 text-center mb-8">Como este é o seu primeiro acesso, crie uma senha segura.</p>
+          <form onSubmit={handlePasswordChange} className="space-y-5">
+            <input type="password" placeholder="Nova senha" required value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-[#1F9D6B]" />
+            <input type="password" placeholder="Confirmar nova senha" required value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-[#1F9D6B]" />
+            {authError && <div className="text-red-400 text-sm text-center">{authError}</div>}
+            <button type="submit" disabled={authLoading} className="w-full py-3 bg-[#1F9D6B] text-white rounded-xl font-bold hover:bg-[#188057] flex justify-center items-center">
+              {authLoading ? <Loader2 size={18} className="animate-spin" /> : "Salvar nova senha"}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // PAINEL PRINCIPAL (Com Fundo de Imagem + Fontes Corrigidas)
   return (
-    <div className="fixed inset-0 overflow-y-auto font-sans transition-colors duration-300" style={{ backgroundColor: t.bg, color: t.text }}>
+    <div 
+      className="fixed inset-0 overflow-y-auto transition-colors duration-300" 
+      style={{ 
+        backgroundColor: t.bg, 
+        backgroundImage: `url('${BACKGROUND_URL}')`, 
+        backgroundSize: 'cover', 
+        backgroundPosition: 'left', 
+        backgroundAttachment: 'fixed',
+        color: t.text,
+        fontFamily: "'Inter', sans-serif"
+      }}
+    >
+      <style>{FONTS}</style>
       <div className="min-h-full w-full max-w-7xl mx-auto p-4 sm:p-8">
         
         {/* Cabeçalho */}
@@ -285,7 +324,7 @@ export default function CsatApp() {
             <button onClick={() => setDark(!dark)} className="p-2.5 rounded-xl transition-colors duration-300 hover:opacity-80" style={{ backgroundColor: t.panel2, color: t.text }}>
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <div className="border text-sm px-4 py-2.5 rounded-xl font-mono flex items-center gap-2 transition-colors duration-300" style={{ backgroundColor: t.panel2, color: t.textSoft, borderColor: t.border }}>
+            <div className="border text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 transition-colors duration-300" style={{ backgroundColor: t.panel2, color: t.textSoft, borderColor: t.border, fontFamily: "'JetBrains Mono', monospace" }}>
               <User size={16} /> {session.user.email}
             </div>
             <button onClick={handleLogout} className="p-2.5 rounded-xl text-white hover:opacity-80 transition-colors duration-300 flex-shrink-0" style={{ backgroundColor: t.danger }} title="Sair">
@@ -308,19 +347,19 @@ export default function CsatApp() {
                 
                 {/* Coluna Esquerda: Textos */}
                 <div className="flex flex-col flex-1 gap-6 justify-center">
-                  <h2 className="text-3xl sm:text-4xl font-bold font-['Montserrat'] mb-2">Painel de performance</h2>
+                  <h2 className="text-3xl sm:text-4xl font-bold mb-2" style={{ fontFamily: "'Montserrat', sans-serif" }}>Painel de performance</h2>
                   
                   <div className="flex flex-col gap-1">
                     <div className="text-xl flex items-center gap-2">
-                      <span className="w-44 transition-colors duration-300" style={{ color: t.textSoft }}>C-sat atual:</span> 
-                      <span className="font-mono font-bold text-2xl transition-colors duration-300" style={{ color: myPct >= GOAL ? t.accent : t.warn }}>
+                      <span className="w-44 transition-colors duration-300 font-medium" style={{ color: t.textSoft }}>C-sat atual:</span> 
+                      <span className="font-bold text-2xl transition-colors duration-300" style={{ color: myPct >= GOAL ? t.accent : t.warn, fontFamily: "'JetBrains Mono', monospace" }}>
                         {fmtPct(myPct)}
                       </span>
                     </div>
                     
                     <div className="text-xl flex items-center gap-2">
-                      <span className="w-44 transition-colors duration-300" style={{ color: t.textSoft }}>Média da equipe:</span> 
-                      <span className="font-mono font-bold text-2xl transition-colors duration-300" style={{ color: t.text }}>
+                      <span className="w-44 transition-colors duration-300 font-medium" style={{ color: t.textSoft }}>Média da equipe:</span> 
+                      <span className="font-bold text-2xl transition-colors duration-300" style={{ color: t.text, fontFamily: "'JetBrains Mono', monospace" }}>
                         {fmtPct(TEAM_AVERAGE)}
                       </span>
                     </div>
@@ -335,8 +374,8 @@ export default function CsatApp() {
                   
                   <button 
                     onClick={() => setView("list")} 
-                    className="px-8 py-4 rounded-xl font-bold text-white flex items-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all mt-4 font-['Montserrat']" 
-                    style={{ backgroundColor: t.accent }}
+                    className="px-8 py-4 rounded-xl font-bold text-white flex items-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all mt-4" 
+                    style={{ backgroundColor: t.accent, fontFamily: "'Montserrat', sans-serif" }}
                   >
                     <List size={18} /> Detalhar Meus Atendimentos e Notas
                   </button>
@@ -348,7 +387,7 @@ export default function CsatApp() {
             {view === "list" && (
               <div className="w-full animate-in fade-in duration-300">
                 <div className="flex items-center justify-between mb-4">
-                  <button onClick={() => setView("dashboard")} className="px-4 py-2 border rounded-xl flex items-center gap-2 hover:opacity-80 transition-colors duration-300 font-['Montserrat'] font-medium" style={{ backgroundColor: t.panel, borderColor: t.border, color: t.textSoft }}>
+                  <button onClick={() => setView("dashboard")} className="px-4 py-2 border rounded-xl flex items-center gap-2 hover:opacity-80 transition-colors duration-300 font-medium" style={{ backgroundColor: t.panel, borderColor: t.border, color: t.textSoft, fontFamily: "'Montserrat', sans-serif" }}>
                     <ArrowLeft size={16} /> Voltar ao Painel
                   </button>
                   <div className="text-sm transition-colors duration-300" style={{ color: t.textSoft }}>Exibindo <strong>{records.length}</strong> chamados</div>
@@ -382,10 +421,10 @@ export default function CsatApp() {
 
                           return (
                             <tr key={r.id} className="border-b hover:bg-black/5 transition-colors duration-300" style={{ borderColor: t.border }}>
-                              <td className="p-4 font-mono font-medium">{r.protocolo}</td>
+                              <td className="p-4 font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{r.protocolo}</td>
                               <td className="p-4 whitespace-nowrap">{r.data}</td>
                               <td className="p-4 text-center">
-                                <span className="px-3 py-1 rounded-md border font-mono font-bold text-sm" style={badgeStyle}>{r.avaliacao}</span>
+                                <span className="px-3 py-1 rounded-md border font-bold text-sm" style={{ ...badgeStyle, fontFamily: "'JetBrains Mono', monospace" }}>{r.avaliacao}</span>
                               </td>
                               <td className="p-4 transition-colors duration-300" style={{ color: t.textSoft }}><div className="line-clamp-2 text-xs">{r.tabulacao || "—"}</div></td>
                               <td className="p-4">
