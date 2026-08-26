@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Moon, Sun, LogOut, User, Gauge, Loader2, List, ArrowLeft, CheckCircle2, Lock, Mail, Key, ArrowUpDown } from "lucide-react";
+import { Moon, Sun, LogOut, User, Loader2, List, ArrowLeft, CheckCircle2, Lock, Mail, ArrowUpDown } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = "https://uahkplwssonbxzydjytb.supabase.co";
@@ -9,6 +9,7 @@ const BACKGROUND_URL = "https://i.postimg.cc/fT3Trm2M/Template-apresentacao-i-Gr
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const GOAL = 95;
+const TEAM_AVERAGE = 82.93; // Média atual consolidada da equipe
 const DEFAULT_PASSWORD = "iGreen@2026";
 
 function fmtPct(n) {
@@ -17,50 +18,86 @@ function fmtPct(n) {
 }
 
 const tokens = {
-  light: { bg: "#F5F7F3", panel: "#FFFFFF", panel2: "#EEF2EA", text: "#0F1C1A", textSoft: "#4B5C55", border: "#DCE3D9", accent: "#1F9D6B", accentSoft: "#DFF3E8", warn: "#C9861A", danger: "#C24A3D", needle: "#0F1C1A" },
+  light: { bg: "#F5F7F3", panel: "#FFFFFF", panel2: "#EEF2EA", text: "#0F1C1A", textSoft: "#4B5C55", border: "#DCE3D9", accent: "#1F9D6B", accentSoft: "#DFF3E8", warn: "#E8B94A", danger: "#C24A3D", needle: "#0F1C1A" },
   dark: { bg: "#0B1412", panel: "#101E1B", panel2: "#152420", text: "#EAF3EE", textSoft: "#93A69D", border: "#1F332C", accent: "#35D07F", accentSoft: "#12281F", warn: "#E8B94A", danger: "#E17163", needle: "#EAF3EE" },
 };
 
-function Gauge95({ value, t }) {
-  const clamped = Math.max(0, Math.min(100, value || 0));
-  const angle = (clamped / 100) * 180;
-  const goalAngle = (GOAL / 100) * 180;
-  const r = 80;
-  const cx = 100, cy = 100;
-  const toXY = (deg) => {
-    const rad = ((180 - deg) * Math.PI) / 180;
-    return [cx - r * Math.cos(rad), cy - r * Math.sin(rad)];
-  };
-  const [nx, ny] = toXY(angle);
-  const [gx, gy] = toXY(goalAngle);
+// COMPONENTE: Gráfico de Linha/Pontos de Performance
+function PerformanceChart({ weeklyData, t }) {
+  const width = 500;
+  const height = 250;
+  const paddingX = 50;
+  const paddingY = 40;
+  
+  const chartW = width - paddingX * 2;
+  const chartH = height - paddingY * 2;
 
-  const arcPath = (fromDeg, toDeg, radius) => {
-    const [x1, y1] = toXY(fromDeg);
-    const [x2, y2] = (() => {
-      const rad = ((180 - toDeg) * Math.PI) / 180;
-      return [cx - radius * Math.cos(rad), cy - radius * Math.sin(rad)];
-    })();
-    const large = toDeg - fromDeg > 180 ? 1 : 0;
-    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${large} 1 ${x2} ${y2}`;
-  };
+  const goalY = paddingY + chartH - ((GOAL / 100) * chartH);
+
+  // Calcula a posição dos 4 pontos (Semanas)
+  const xStep = chartW / 3;
+  const points = weeklyData.map((w, i) => {
+    const x = paddingX + (i * xStep);
+    const y = paddingY + chartH - ((w.pct / 100) * chartH);
+    return { x, y, pct: w.pct, name: w.name, label: w.label, hasData: w.hasData };
+  });
+
+  // Cria a linha conectando apenas os pontos que possuem dados válidos
+  const validPoints = points.filter(p => p.hasData);
+  const pathD = validPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(" ");
 
   return (
-    <svg viewBox="0 0 200 130" className="w-full max-w-[300px] overflow-visible">
-      <path d={arcPath(0, 180, r)} stroke={t.border} strokeWidth="12" fill="none" strokeLinecap="round" />
-      <path d={arcPath(0, angle, r)} stroke={t.accent} strokeWidth="12" fill="none" strokeLinecap="round" />
-      <line x1={gx} y1={gy} x2={cx - (r - 22) * Math.cos(((180 - goalAngle) * Math.PI) / 180)} y2={cy - (r - 22) * Math.sin(((180 - goalAngle) * Math.PI) / 180)} stroke={t.warn} strokeWidth="3" />
-      <circle cx={cx} cy={cy} r="5" fill={t.needle} />
-      <line x1={cx} y1={cy} x2={nx} y2={ny} stroke={t.needle} strokeWidth="3" strokeLinecap="round" />
-      <text x={cx} y={cy + 25} textAnchor="middle" className="font-mono text-2xl font-bold" fill={t.text}>{fmtPct(value)}</text>
-      <text x={0} y={115} className="font-sans text-[10px]" fill={t.textSoft}>0%</text>
-      <text x={200} y={115} textAnchor="end" className="font-sans text-[10px]" fill={t.textSoft}>100%</text>
-      <text x={gx} y={gy - 15} textAnchor="middle" className="font-sans text-[10px] font-bold" fill={t.warn}>meta {GOAL}%</text>
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
+      {/* Eixos (X e Y) */}
+      <line x1={paddingX} y1={paddingY - 10} x2={paddingX} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
+      <line x1={paddingX} y1={height - paddingY} x2={width - paddingX + 10} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
+
+      {/* Linha da Meta 95% (Amarela/Aviso) */}
+      <line x1={paddingX} y1={goalY} x2={width - paddingX + 10} y2={goalY} stroke={t.warn} strokeWidth="2" strokeDasharray="6,6" />
+      <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold">95%</text>
+
+      {/* Linha de Conexão dos Resultados (Verde) */}
+      {validPoints.length > 1 && (
+        <path d={pathD} fill="none" stroke={t.accent} strokeWidth="3" opacity="0.5" />
+      )}
+
+      {/* Pontos de Dados e Legendas */}
+      {points.map((p, i) => (
+        <g key={i}>
+          {/* Nome da Semana no Eixo X */}
+          <text x={p.x} y={height - paddingY + 20} textAnchor="middle" fontSize="11" fill={t.textSoft} fontWeight="600">{p.name}</text>
+          <text x={p.x} y={height - paddingY + 34} textAnchor="middle" fontSize="9" fill={t.textSoft} opacity="0.7">{p.label}</text>
+          
+          {/* Ponto e Valor */}
+          {p.hasData && (
+            <>
+              <circle cx={p.x} cy={p.y} r="6" fill={t.accent} />
+              <circle cx={p.x} cy={p.y} r="3" fill={t.bg} />
+              <text x={p.x} y={p.y - 12} textAnchor="middle" fontSize="13" fill={t.text} fontWeight="bold" fontFamily="monospace">
+                {fmtPct(p.pct)}
+              </text>
+            </>
+          )}
+        </g>
+      ))}
     </svg>
   );
 }
 
+// Identificador de Ciclos de Metrificação (Semanas Específicas)
+const getMetrificationWeek = (dateString) => {
+  if (!dateString) return null;
+  const [y, m, d] = dateString.split(' ')[0].split('-');
+  
+  if ((m === '07' && d >= '26') || (m === '08' && d <= '02')) return 1;
+  if (m === '08' && d >= '03' && d <= '10') return 2;
+  if (m === '08' && d >= '11' && d <= '18') return 3;
+  if (m === '08' && d >= '19' && d <= '25') return 4;
+  return null;
+};
+
 export default function CsatApp() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [emailInput, setEmailInput] = useState("");
@@ -133,26 +170,21 @@ export default function CsatApp() {
     setTimeout(() => setSavingId(null), 1000);
   };
 
-const myPct = useMemo(() => {
-    // 1. Pega apenas avaliações válidas (ignora 0, -1 e vazios)
+  // CÁLCULO TOP BOX EXATO (Geral)
+  const myPct = useMemo(() => {
     const validRecords = records.filter(r => {
       const n = Number(r.avaliacao);
       return !isNaN(n) && n > 0;
     });
-
     if (validRecords.length === 0) return 0;
-
-    // 2. Conta quantas dessas válidas são positivas (4 ou 5)
     const positiveRecords = validRecords.filter(r => {
       const n = Number(r.avaliacao);
       return n === 4 || n === 5;
     });
-
-    // 3. Aplica a fórmula: (Quantidade Positivas / Quantidade Total Válida) * 100
     return (positiveRecords.length / validRecords.length) * 100;
   }, [records]);
 
-  // Agrupamento estrito para o Gráfico com as datas do ciclo usando a NOVA LÓGICA
+  // CÁLCULO TOP BOX EXATO (Por Semana Fixa)
   const weeklyStats = useMemo(() => {
     const stats = {
       1: { name: "1ª Semana", label: "26/07 a 02/08", items: [] },
@@ -169,19 +201,14 @@ const myPct = useMemo(() => {
     });
 
     return Object.values(stats).map(w => {
-      // 1. Total válido da semana
       const validInWeek = w.items.filter(r => {
         const n = Number(r.avaliacao);
         return !isNaN(n) && n > 0;
       });
-
-      // 2. Positivas da semana
       const positiveInWeek = validInWeek.filter(r => {
         const n = Number(r.avaliacao);
         return n === 4 || n === 5;
       });
-
-      // 3. Cálculo da semana
       const pct = validInWeek.length > 0 
         ? (positiveInWeek.length / validInWeek.length) * 100 
         : 0;
@@ -189,29 +216,10 @@ const myPct = useMemo(() => {
       return { 
         name: w.name, 
         label: w.label,
-        total: validInWeek.length, // Agora exibe o total *válido* embaixo do gráfico
+        total: validInWeek.length, 
         pct: pct,
         hasData: validInWeek.length > 0
       };
-    });
-  }, [records]);
-
-  const weeklyStats = useMemo(() => {
-    const weeks = {};
-    records.forEach(r => {
-      if (!r.data) return;
-      const d = new Date(r.data);
-      if (isNaN(d)) return;
-      const startOfYear = new Date(d.getFullYear(), 0, 1);
-      const weekNum = Math.ceil((((d - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7);
-      const weekKey = `Semana ${weekNum} (${d.getFullYear()})`;
-      if (!weeks[weekKey]) weeks[weekKey] = { name: weekKey, items: [] };
-      weeks[weekKey].items.push(r);
-    });
-    return Object.values(weeks).map(w => {
-      const valid = w.items.filter(r => !isNaN(Number(r.avaliacao)) && Number(r.avaliacao) > 0);
-      const sum = valid.reduce((acc, curr) => acc + Number(curr.avaliacao), 0);
-      return { name: w.name, total: w.items.length, pct: valid.length > 0 ? (sum / (valid.length * 5)) * 100 : 0 };
     });
   }, [records]);
 
@@ -233,9 +241,9 @@ const myPct = useMemo(() => {
 
   if (!session) {
     return (
-      <div className="fixed inset-0 overflow-y-auto bg-[#0A0A0A] flex flex-col items-center justify-center p-6" style={{ backgroundImage: `url('${BACKGROUND_URL}')`, backgroundSize: 'cover', backgroundPosition: 'left' }}>
+      <div className="fixed inset-0 overflow-y-auto flex flex-col items-center justify-center p-6 bg-[#0A0A0A]" style={{ backgroundImage: `url('${BACKGROUND_URL}')`, backgroundSize: 'cover', backgroundPosition: 'left' }}>
         <div className="w-full max-w-md rounded-3xl border border-white/20 bg-black/60 backdrop-blur-md p-10 shadow-2xl">
-          <h2 className="text-2xl font-bold mb-2 text-white text-center">Gestão de Resultados</h2>
+          <h2 className="text-2xl font-bold mb-2 text-white text-center font-['Montserrat']">Gestão de Resultados</h2>
           <p className="text-sm text-gray-300 text-center mb-8">Faça login para ver seus resultados</p>
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
@@ -262,31 +270,25 @@ const myPct = useMemo(() => {
     );
   }
 
-  // ==== O LAYOUT FLUIDO + AS CORES DINÂMICAS ====
   return (
     <div className="fixed inset-0 overflow-y-auto font-sans transition-colors duration-300" style={{ backgroundColor: t.bg, color: t.text }}>
-      <div className="min-h-full w-full p-4 sm:p-8">
+      <div className="min-h-full w-full max-w-7xl mx-auto p-4 sm:p-8">
         
         {/* Cabeçalho */}
-        <div className="flex items-center justify-between mb-8 w-full px-6 py-4 rounded-2xl border shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl transition-colors duration-300" style={{ backgroundColor: t.accentSoft }}>
-              <Gauge size={26} color={t.accent} />
-            </div>
-            <div>
-              <div className="font-bold text-xl">Painel de Performance</div>
-              <div className="text-sm transition-colors duration-300" style={{ color: t.textSoft }}>Meta C-SAT: {GOAL}%</div>
+        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-12 w-full px-6 py-4 rounded-2xl border shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="p-2 rounded-xl transition-colors duration-300 flex-shrink-0" style={{ backgroundColor: t.accentSoft }}>
+              <img src="https://igreenenergy.com.br/wp-content/uploads/2023/11/logo_igreen-1-e1704289874457.png" alt="iGreen Logo" className="h-8 object-contain" onError={(e) => e.target.style.display='none'} />
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {/* O BOTÃO DE TEMA VOLTOU AQUI */}
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
             <button onClick={() => setDark(!dark)} className="p-2.5 rounded-xl transition-colors duration-300 hover:opacity-80" style={{ backgroundColor: t.panel2, color: t.text }}>
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
             <div className="border text-sm px-4 py-2.5 rounded-xl font-mono flex items-center gap-2 transition-colors duration-300" style={{ backgroundColor: t.panel2, color: t.textSoft, borderColor: t.border }}>
               <User size={16} /> {session.user.email}
             </div>
-            <button onClick={handleLogout} className="p-2.5 rounded-xl text-white hover:opacity-80 transition-colors duration-300" style={{ backgroundColor: t.danger }} title="Sair">
+            <button onClick={handleLogout} className="p-2.5 rounded-xl text-white hover:opacity-80 transition-colors duration-300 flex-shrink-0" style={{ backgroundColor: t.danger }} title="Sair">
               <LogOut size={18} />
             </button>
           </div>
@@ -299,44 +301,54 @@ const myPct = useMemo(() => {
           </div>
         ) : (
           <div className="w-full">
+            
+            {/* TELA INICIAL */}
             {view === "dashboard" && (
-              <div className="flex flex-col items-center w-full animate-in fade-in duration-300">
+              <div className="flex flex-col lg:flex-row gap-12 w-full animate-in fade-in duration-500">
                 
-                {/* Gráfico Principal */}
-                <div className="border rounded-3xl p-8 flex flex-col items-center w-full max-w-2xl mb-8 shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
-                  <div className="text-sm uppercase tracking-widest mb-6 font-semibold transition-colors duration-300" style={{ color: t.textSoft }}>C-SAT Geral Atual</div>
-                  <Gauge95 value={myPct} t={t} />
-                  <div className="text-sm mt-8 px-5 py-2 rounded-full transition-colors duration-300" style={{ backgroundColor: t.panel2, color: t.textSoft }}>
-                    Baseado em <strong>{records.length}</strong> atendimento(s)
+                {/* Coluna Esquerda: Textos */}
+                <div className="flex flex-col flex-1 gap-6 justify-center">
+                  <h2 className="text-3xl sm:text-4xl font-bold font-['Montserrat'] mb-2">Painel de performance</h2>
+                  
+                  <div className="flex flex-col gap-1">
+                    <div className="text-xl flex items-center gap-2">
+                      <span className="w-44 transition-colors duration-300" style={{ color: t.textSoft }}>C-sat atual:</span> 
+                      <span className="font-mono font-bold text-2xl transition-colors duration-300" style={{ color: myPct >= GOAL ? t.accent : t.warn }}>
+                        {fmtPct(myPct)}
+                      </span>
+                    </div>
+                    
+                    <div className="text-xl flex items-center gap-2">
+                      <span className="w-44 transition-colors duration-300" style={{ color: t.textSoft }}>Média da equipe:</span> 
+                      <span className="font-mono font-bold text-2xl transition-colors duration-300" style={{ color: t.text }}>
+                        {fmtPct(TEAM_AVERAGE)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Semanas */}
-                <div className="w-full mb-8">
-                  <h3 className="text-xl font-bold mb-4 px-2">Resultados por Semana</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full">
-                    {weeklyStats.map((week, idx) => (
-                      <div key={idx} className="border rounded-2xl p-6 shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
-                        <div className="font-bold text-sm mb-3 transition-colors duration-300" style={{ color: t.textSoft }}>{week.name}</div>
-                        <div className="text-3xl font-mono font-bold mb-2 transition-colors duration-300" style={{ color: week.pct >= GOAL ? t.accent : t.warn }}>
-                          {fmtPct(week.pct)}
-                        </div>
-                        <div className="text-xs transition-colors duration-300" style={{ color: t.textSoft }}>{week.total} chamado(s)</div>
-                      </div>
-                    ))}
+                {/* Coluna Direita: Gráfico e Botão */}
+                <div className="flex flex-col flex-[1.5] gap-6 items-center">
+                  <div className="w-full border rounded-[2rem] p-6 shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
+                    <PerformanceChart weeklyData={weeklyStats} t={t} />
                   </div>
+                  
+                  <button 
+                    onClick={() => setView("list")} 
+                    className="px-8 py-4 rounded-xl font-bold text-white flex items-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all mt-4 font-['Montserrat']" 
+                    style={{ backgroundColor: t.accent }}
+                  >
+                    <List size={18} /> Detalhar Meus Atendimentos e Notas
+                  </button>
                 </div>
-
-                <button onClick={() => setView("list")} className="px-8 py-4 rounded-xl font-bold text-white flex items-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all mb-10" style={{ backgroundColor: t.accent }}>
-                  <List size={18} /> Detalhar Meus Atendimentos e Notas
-                </button>
               </div>
             )}
 
+            {/* TELA DA TABELA */}
             {view === "list" && (
               <div className="w-full animate-in fade-in duration-300">
                 <div className="flex items-center justify-between mb-4">
-                  <button onClick={() => setView("dashboard")} className="px-4 py-2 border rounded-xl flex items-center gap-2 hover:opacity-80 transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border, color: t.textSoft }}>
+                  <button onClick={() => setView("dashboard")} className="px-4 py-2 border rounded-xl flex items-center gap-2 hover:opacity-80 transition-colors duration-300 font-['Montserrat'] font-medium" style={{ backgroundColor: t.panel, borderColor: t.border, color: t.textSoft }}>
                     <ArrowLeft size={16} /> Voltar ao Painel
                   </button>
                   <div className="text-sm transition-colors duration-300" style={{ color: t.textSoft }}>Exibindo <strong>{records.length}</strong> chamados</div>
@@ -363,7 +375,6 @@ const myPct = useMemo(() => {
                       <tbody>
                         {sortedRecords.map((r) => {
                           const val = Number(r.avaliacao);
-                          // Lógica dinâmica de cores das notas baseada no tema
                           let badgeStyle = { backgroundColor: "transparent", color: t.textSoft, borderColor: t.border };
                           if (val === 1 || val === 2) badgeStyle = { backgroundColor: t.danger + "20", color: t.danger, borderColor: t.danger + "50" };
                           else if (val === 3) badgeStyle = { backgroundColor: t.warn + "20", color: t.warn, borderColor: t.warn + "50" };
