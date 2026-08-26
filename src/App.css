@@ -182,3 +182,33 @@
     border-right-color: var(--border);
   }
 }
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0f172a; /* Fundo padrão escuro elegante */
+  color: #f8fafc;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  max-width: 1440px; /* Trava a largura máxima para monitores grandes */
+  margin: 0 auto;    /* Centraliza o painel na tela */
+  padding: 24px;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* Padronização de tamanhos para evitar textos gigantes em telas largas */
+h1 {
+  font-size: 1.875rem !important; /* 30px */
+}
+
+h2 {
+  font-size: 1.5rem !important;    /* 24px */
+}
+
+p, span, td, th {
+  font-size: 0.95rem;
+}
