@@ -31,7 +31,6 @@ const tokens = {
   dark: { bg: "#0B1412", panel: "#101E1B", panel2: "#152420", text: "#EAF3EE", textSoft: "#93A69D", border: "#1F332C", accent: "#35D07F", accentSoft: "#12281F", warn: "#E8B94A", danger: "#E17163", needle: "#EAF3EE" },
 };
 
-// COMPONENTE 1: Gráfico de Linha (Desempenho Semanal)
 function PerformanceChart({ weeklyData, t, teamAvg }) {
   const width = 500;
   const height = 250;
@@ -56,24 +55,19 @@ function PerformanceChart({ weeklyData, t, teamAvg }) {
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
-      {/* Eixos */}
       <line x1={paddingX} y1={paddingY - 10} x2={paddingX} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
       <line x1={paddingX} y1={height - paddingY} x2={width - paddingX + 10} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
 
-      {/* Linha Média da Equipe (Dinâmica) */}
       <line x1={paddingX} y1={avgY} x2={width - paddingX + 10} y2={avgY} stroke={t.textSoft} strokeWidth="2" strokeDasharray="4,4" opacity="0.6" />
       <text x={width - paddingX + 18} y={avgY + 4} fill={t.textSoft} fontSize="11" fontWeight="600" style={{ fontFamily: "'Montserrat', sans-serif" }}>Média ({fmtPct(teamAvg)})</text>
 
-      {/* Linha da Meta */}
       <line x1={paddingX} y1={goalY} x2={width - paddingX + 10} y2={goalY} stroke={t.warn} strokeWidth="2" strokeDasharray="6,6" />
       <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>Meta 95%</text>
 
-      {/* Linha de Conexão */}
       {validPoints.length > 1 && (
         <path d={pathD} fill="none" stroke={t.accent} strokeWidth="3" opacity="0.5" />
       )}
 
-      {/* Pontos */}
       {points.map((p, i) => (
         <g key={i}>
           <text x={p.x} y={height - paddingY + 20} textAnchor="middle" fontSize="11" fill={t.textSoft} fontWeight="600" style={{ fontFamily: "'Inter', sans-serif" }}>{p.name}</text>
@@ -91,7 +85,6 @@ function PerformanceChart({ weeklyData, t, teamAvg }) {
   );
 }
 
-// COMPONENTE 2: Gráfico de Barras de Ranking (Admin)
 function TeamBarChart({ data, t, goal, teamAvg }) {
   const width = Math.max(600, data.length * 80 + 100);
   const height = 280;
@@ -137,7 +130,6 @@ function TeamBarChart({ data, t, goal, teamAvg }) {
   );
 }
 
-// FORMATADOR DE DATA 100% BLINDADO
 const getMetrificationWeek = (dateString) => {
   if (!dateString) return null;
   let d, m, y;
@@ -155,7 +147,7 @@ const getMetrificationWeek = (dateString) => {
   return null;
 };
 
-// VALIDADOR ESTRITO (EQUIVALENTE AO CONT.SES DO EXCEL)
+// VALIDADOR ESTRITO (EQUIVALENTE AO CONT.SES)
 const isValidRecord = (r) => {
   if (getMetrificationWeek(r.data) === null) return false;
   const val = Number(r.avaliacao);
@@ -276,29 +268,10 @@ export default function CsatApp() {
     return allRecords;
   }, [allRecords, isAdmin, selectedAgent]);
 
-  // CÁLCULO GERAL (C-SAT Atual) - Travado no Ciclo (CONT.SES)
-  const myPct = useMemo(() => {
-    const validRecords = displayRecords.filter(isValidRecord);
-    if (validRecords.length === 0) return 0;
-    
-    const positiveRecords = validRecords.filter(r => Number(r.avaliacao) >= 4);
-    return (positiveRecords.length / validRecords.length) * 100;
-  }, [displayRecords]);
+  // --- NOVA LÓGICA DE EXCLUSÃO DE AGENTES ZERADOS ---
 
-  // MÉDIA DA EQUIPE (Linha do Gráfico) - Travada no Ciclo (CONT.SES)
-  const liveTeamAvg = useMemo(() => {
-    if (!isAdmin) return 82.93; // Operador vê número base por segurança
-    
-    const validRecords = allRecords.filter(isValidRecord);
-    if (validRecords.length === 0) return 0;
-    
-    const positiveRecords = validRecords.filter(r => Number(r.avaliacao) >= 4);
-    return (positiveRecords.length / validRecords.length) * 100;
-  }, [allRecords, isAdmin]);
-
-  // RANKING DA EQUIPE (Gráfico Gestor) - Travado no Ciclo (CONT.SES)
-  const agentsStats = useMemo(() => {
-    if (!isAdmin || selectedAgent !== "ALL") return [];
+  // 1. Mapeia o C-SAT de TODOS os agentes
+  const allAgentsMap = useMemo(() => {
     const stats = {};
     allRecords.filter(isValidRecord).forEach(r => {
       const agent = r.atendente;
@@ -307,13 +280,59 @@ export default function CsatApp() {
       if (Number(r.avaliacao) >= 4) stats[agent].positive += 1;
     });
     return Object.entries(stats).map(([agent, d]) => ({
+      email: agent,
       name: agent.split('@')[0],
-      pct: (d.positive / d.total) * 100,
-      total: d.total
-    })).sort((a, b) => b.pct - a.pct);
-  }, [allRecords, isAdmin, selectedAgent]);
+      pct: d.total > 0 ? (d.positive / d.total) * 100 : 0,
+      total: d.total,
+      positive: d.positive
+    }));
+  }, [allRecords]);
 
-  // DESEMPENHO SEMANAL - Travado no Ciclo (CONT.SES)
+  // 2. Filtra removendo os agentes com 0% (Média Zerada)
+  const validGlobalAgents = useMemo(() => {
+    return allAgentsMap.filter(a => a.pct > 0);
+  }, [allAgentsMap]);
+
+  const validEmailsSet = useMemo(() => {
+    return new Set(validGlobalAgents.map(a => a.email));
+  }, [validGlobalAgents]);
+
+  // 3. Média da Equipe (Agora totalmente sem o peso morto dos zerados)
+  const liveTeamAvg = useMemo(() => {
+    if (!isAdmin) return 82.93; // Operador vê número base
+    if (validGlobalAgents.length === 0) return 0;
+    
+    const totalPos = validGlobalAgents.reduce((sum, a) => sum + a.positive, 0);
+    const totalAv = validGlobalAgents.reduce((sum, a) => sum + a.total, 0);
+    return (totalPos / totalAv) * 100;
+  }, [validGlobalAgents, isAdmin]);
+
+  // 4. Garante que os gráficos gerais também não recebam os chamados desses atendentes
+  const effectiveRecords = useMemo(() => {
+    if (isAdmin && selectedAgent === "ALL") {
+      return displayRecords.filter(r => validEmailsSet.has(r.atendente));
+    }
+    return displayRecords;
+  }, [displayRecords, isAdmin, selectedAgent, validEmailsSet]);
+
+  // --- FIM DA NOVA LÓGICA ---
+
+  // CÁLCULO GERAL (C-SAT Atual)
+  const myPct = useMemo(() => {
+    const validRecords = effectiveRecords.filter(isValidRecord);
+    if (validRecords.length === 0) return 0;
+    
+    const positiveRecords = validRecords.filter(r => Number(r.avaliacao) >= 4);
+    return (positiveRecords.length / validRecords.length) * 100;
+  }, [effectiveRecords]);
+
+  // RANKING DA EQUIPE (Apenas com atendentes válidos)
+  const agentsStats = useMemo(() => {
+    if (!isAdmin || selectedAgent !== "ALL") return [];
+    return validGlobalAgents.sort((a, b) => b.pct - a.pct);
+  }, [isAdmin, selectedAgent, validGlobalAgents]);
+
+  // DESEMPENHO SEMANAL (Limpo dos zerados na Visão Geral)
   const weeklyStats = useMemo(() => {
     const stats = {
       1: { name: "1ª Semana", label: "26/07 a 02/08", items: [] },
@@ -321,12 +340,12 @@ export default function CsatApp() {
       3: { name: "3ª Semana", label: "11/08 a 18/08", items: [] },
       4: { name: "4ª Semana", label: "19/08 a 25/08", items: [] },
     };
-    displayRecords.forEach(r => {
+    effectiveRecords.forEach(r => {
       const weekId = getMetrificationWeek(r.data);
       if (weekId && stats[weekId]) stats[weekId].items.push(r);
     });
     return Object.values(stats).map(w => {
-      const validInWeek = w.items.filter(r => [1, 2, 3, 4, 5].includes(Number(r.avaliacao)));
+      const validInWeek = w.items.filter(isValidRecord);
       const pos = validInWeek.filter(r => Number(r.avaliacao) >= 4);
       return { 
         name: w.name, 
@@ -336,7 +355,7 @@ export default function CsatApp() {
         hasData: validInWeek.length > 0 
       };
     });
-  }, [displayRecords]);
+  }, [effectiveRecords]);
 
   const handleSort = (key) => {
     setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
