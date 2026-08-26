@@ -88,18 +88,23 @@ function PerformanceChart({ weeklyData, t }) {
   );
 }
 
-// CORREÇÃO DEFINITIVA: Leitura exata do formato do Supabase (YYYY-MM-DD)
+// FORMATADOR DE DATA 100% BLINDADO
 const getMetrificationWeek = (dateString) => {
   if (!dateString) return null;
   
-  // Pega apenas os 10 primeiros caracteres (ex: "2026-08-14")
-  const cleanDate = dateString.substring(0, 10);
-  const parts = cleanDate.split('-');
-  
-  if (parts.length !== 3) return null;
-  
-  const month = parseInt(parts[1], 10);
-  const day = parseInt(parts[2], 10);
+  let d, m, y;
+  const cleanDate = dateString.split('T')[0].split(' ')[0]; // Garante que só peguemos "YYYY-MM-DD"
+
+  if (cleanDate.includes('/')) {
+    [d, m, y] = cleanDate.split('/');
+  } else if (cleanDate.includes('-')) {
+    [y, m, d] = cleanDate.split('-');
+  } else {
+    return null;
+  }
+
+  const month = parseInt(m, 10);
+  const day = parseInt(d, 10);
 
   if ((month === 7 && day >= 26) || (month === 8 && day <= 2)) return 1;
   if (month === 8 && day >= 3 && day <= 10) return 2;
@@ -148,22 +153,47 @@ export default function CsatApp() {
       return;
     }
     let mounted = true;
+    
+    // --- NOVO SISTEMA DE PAGINAÇÃO (BYPASS DO LIMITE DE 1000 LINHAS) ---
     (async () => {
       setLoading(true);
-      
-      // TRAVA REMOVIDA: Puxando até 15.000 chamados para não cortar Semanas 1 e 2
-      let query = supabase.from('atendimentos')
-        .select('*')
-        .limit(15000) 
-        .order('criado_em', { ascending: false });
+      let allFetchedData = [];
+      let from = 0;
+      const step = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        let query = supabase.from('atendimentos')
+          .select('*')
+          .gte('data', '2026-07-25') // Otimiza a busca para pegar apenas o ciclo atual do banco
+          .lte('data', '2026-08-31') 
+          .order('criado_em', { ascending: false })
+          .range(from, from + step - 1); // Paginação
+          
+        if (!ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
+          query = query.eq('atendente', session.user.email);
+        }
         
-      if (!ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
-        query = query.eq('atendente', session.user.email);
+        const { data, error } = await query;
+
+        if (error) {
+          console.error("Erro ao buscar dados:", error);
+          break;
+        }
+
+        if (data && data.length > 0) {
+          allFetchedData = [...allFetchedData, ...data];
+          from += step;
+          if (data.length < step) hasMore = false; // Se vieram menos de 1000, acabou
+        } else {
+          hasMore = false;
+        }
       }
-      
-      const { data } = await query;
-      if (mounted && data) setAllRecords(data);
-      if (mounted) setLoading(false);
+
+      if (mounted) {
+        setAllRecords(allFetchedData);
+        setLoading(false);
+      }
     })();
     return () => (mounted = false);
   }, [session, needsPasswordChange]);
