@@ -93,7 +93,7 @@ function TeamBarChart({ data, t, goal, isCotas = false }) {
 
         {data.map((d, i) => {
           const x = paddingX + (i * step) + (step / 2) - (barWidth / 2);
-          const barH = (d.val / maxVal) * chartH;
+          const barH = maxVal > 0 ? (Math.abs(d.val) / maxVal) * chartH : 0; 
           const y = paddingY + chartH - barH;
           return (
             <g key={i}>
@@ -158,7 +158,7 @@ export default function CsatApp() {
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   
   const [allRecords, setAllRecords] = useState([]);
-  const [cotasRecords, setCotasRecords] = useState([]); // Base de dados real das cotas
+  const [cotasRecords, setCotasRecords] = useState([]); 
   const [view, setView] = useState("dashboard"); 
   const [selectedMonth, setSelectedMonth] = useState("2026-08"); 
   const [savingId, setSavingId] = useState(null);
@@ -169,7 +169,7 @@ export default function CsatApp() {
 
   const isAdmin = useMemo(() => {
     if (!session?.user?.email) return false;
-    return ADMIN_EMAILS.includes(session.user.email.toLowerCase());
+    return ADMIN_EMAILS.includes(session.user.email.toLowerCase().trim());
   }, [session]);
 
   useEffect(() => {
@@ -187,6 +187,8 @@ export default function CsatApp() {
     (async () => {
       setLoading(true);
       
+      const userEmail = session.user.email.toLowerCase().trim();
+      
       // 1. Busca Atendimentos
       let allFetchedData = [];
       let from = 0; const step = 1000; let hasMore = true;
@@ -197,8 +199,8 @@ export default function CsatApp() {
           .order('id', { ascending: true }) 
           .range(from, from + step - 1);
           
-        if (!ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
-          query = query.eq('atendente', session.user.email);
+        if (!ADMIN_EMAILS.includes(userEmail)) {
+          query = query.eq('atendente', userEmail);
         }
         
         const { data, error } = await query;
@@ -216,9 +218,9 @@ export default function CsatApp() {
       let cotasData = [];
       try {
         let cotasQuery = supabase.from('cotas').select('*');
-        // Se for operador comum, puxa só a dele (camada extra de segurança)
-        if (!ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
-          cotasQuery = cotasQuery.eq('atendente', session.user.email);
+        if (!ADMIN_EMAILS.includes(userEmail)) {
+          // Filtro no backend usando ilike (não sensível a maiúsculas) para garantir leitura
+          cotasQuery = cotasQuery.ilike('atendente', userEmail);
         }
         const { data: cData } = await cotasQuery;
         if (cData) cotasData = cData;
@@ -268,11 +270,11 @@ export default function CsatApp() {
 
   const agentsList = useMemo(() => {
     if (!isAdmin) return [];
-    return [...new Set(allRecords.map(r => r.atendente))].filter(Boolean).sort();
+    return [...new Set(allRecords.map(r => r.atendente?.toLowerCase().trim()))].filter(Boolean).sort();
   }, [allRecords, isAdmin]);
 
   const displayRecords = useMemo(() => {
-    if (isAdmin && selectedAgent !== "ALL") return allRecords.filter(r => r.atendente === selectedAgent);
+    if (isAdmin && selectedAgent !== "ALL") return allRecords.filter(r => r.atendente?.toLowerCase().trim() === selectedAgent.toLowerCase().trim());
     return allRecords;
   }, [allRecords, isAdmin, selectedAgent]);
 
@@ -280,7 +282,7 @@ export default function CsatApp() {
   const allAgentsMap = useMemo(() => {
     const stats = {};
     allRecords.filter(r => isValidRecord(r, selectedMonth)).forEach(r => {
-      const agent = r.atendente;
+      const agent = r.atendente?.toLowerCase().trim();
       if (!stats[agent]) stats[agent] = { total: 0, positive: 0 };
       stats[agent].total += 1;
       if (Number(r.avaliacao) >= 4) stats[agent].positive += 1;
@@ -294,7 +296,7 @@ export default function CsatApp() {
   const validEmailsSet = useMemo(() => new Set(validGlobalAgents.map(a => a.email)), [validGlobalAgents]);
 
   const effectiveRecords = useMemo(() => {
-    if (isAdmin && selectedAgent === "ALL") return displayRecords.filter(r => validEmailsSet.has(r.atendente));
+    if (isAdmin && selectedAgent === "ALL") return displayRecords.filter(r => validEmailsSet.has(r.atendente?.toLowerCase().trim()));
     return displayRecords;
   }, [displayRecords, isAdmin, selectedAgent, validEmailsSet]);
 
@@ -326,10 +328,11 @@ export default function CsatApp() {
     };
     allRecords.forEach(r => {
       const weekId = getMetrificationWeek(r.data, selectedMonth);
-      if (weekId && isValidRecord(r, selectedMonth) && validEmailsSet.has(r.atendente)) {
-        if (!stats[weekId].agents[r.atendente]) stats[weekId].agents[r.atendente] = { total: 0, pos: 0 };
-        stats[weekId].agents[r.atendente].total += 1;
-        if (Number(r.avaliacao) >= 4) stats[weekId].agents[r.atendente].pos += 1;
+      const emailTratado = r.atendente?.toLowerCase().trim();
+      if (weekId && isValidRecord(r, selectedMonth) && validEmailsSet.has(emailTratado)) {
+        if (!stats[weekId].agents[emailTratado]) stats[weekId].agents[emailTratado] = { total: 0, pos: 0 };
+        stats[weekId].agents[emailTratado].total += 1;
+        if (Number(r.avaliacao) >= 4) stats[weekId].agents[emailTratado].pos += 1;
       }
     });
     return Object.values(stats).map(w => {
@@ -359,14 +362,14 @@ export default function CsatApp() {
     });
   }, [displayRecords, sortConfig]);
 
-  // --- PREPARAÇÃO DOS DADOS REAIS DE COTAS ---
+  // --- MATEMÁTICA COTAS BLINDADA CONTRA ERROS DE DIGITAÇÃO DO EXCEL ---
   
-  // 1. Ranking de Cotas da Equipe (Se for admin vendo "ALL")
+  // 1. Ranking de Cotas da Equipe
   const cotasRanking = useMemo(() => {
     return cotasRecords
-      .filter(c => c.mes_referencia === selectedMonth)
+      .filter(c => c.mes_referencia?.trim() === selectedMonth.trim())
       .map(c => ({
-        name: c.atendente.split('@')[0],
+        name: c.atendente?.split('@')[0]?.toLowerCase().trim(),
         val: Number(c.resultado_final) || 0,
         total: 0
       }))
@@ -375,10 +378,14 @@ export default function CsatApp() {
 
   // 2. Tabela individual de Cotas
   const { currentAgentCotaTable, currentAgentCotaFinal } = useMemo(() => {
-    let targetEmail = session?.user?.email;
-    if (isAdmin && selectedAgent !== "ALL") targetEmail = selectedAgent;
+    let targetEmail = session?.user?.email?.toLowerCase().trim();
+    if (isAdmin && selectedAgent !== "ALL") targetEmail = selectedAgent?.toLowerCase().trim();
     
-    const agentCotaData = cotasRecords.find(c => c.atendente === targetEmail && c.mes_referencia === selectedMonth);
+    // Filtro hiper-seguro ignorando maiúsculas e espaços que podem vir do Excel
+    const agentCotaData = cotasRecords.find(c => 
+      c.atendente?.toLowerCase().trim() === targetEmail && 
+      c.mes_referencia?.trim() === selectedMonth.trim()
+    );
     
     return {
       currentAgentCotaTable: agentCotaData?.dados_tabela || [],
@@ -641,7 +648,7 @@ export default function CsatApp() {
                         <div className="flex flex-col items-center justify-center min-h-[300px] opacity-70">
                           <Inbox size={48} color={t.textSoft} className="mb-4" />
                           <h3 className="text-xl font-semibold mb-2" style={{ color: t.text }}>Nenhuma cota sincronizada</h3>
-                          <p className="text-sm text-center" style={{ color: t.textSoft }}>Nenhum dado encontrado para o mês de {selectedMonth}.<br/>Rode a macro no Excel para enviar as cotas.</p>
+                          <p className="text-sm text-center" style={{ color: t.textSoft }}>Nenhum dado encontrado para o mês de {selectedMonth}.<br/>Verifique se o painel está conectado à tabela de Cotas.</p>
                         </div>
                       )}
                     </div>
@@ -675,15 +682,15 @@ export default function CsatApp() {
                                 <th className="p-4 font-semibold uppercase tracking-wider text-xs">Categoria / Métrica</th>
                                 <th className="p-4 font-semibold uppercase tracking-wider text-xs text-center w-32">Pontuação</th>
                                 <th className="p-4 font-semibold uppercase tracking-wider text-xs text-center w-32">Feito</th>
-                                <th className="p-4 font-semibold uppercase tracking-wider text-xs text-right w-32">Cota ($)</th>
+                                <th className="p-4 font-semibold uppercase tracking-wider text-xs text-right w-32">Cota</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y" style={{ borderColor: t.border }}>
                               {currentAgentCotaTable.map((item, idx) => {
-                                // Pula linha se a categoria estiver vazia (linhas em branco do excel)
+                                // Pula a linha se a categoria estiver vazia (linhas em branco da planilha)
                                 if (!item.cat || item.cat.trim() === "") return null;
 
-                                // Identifica subtítulos (Quando o excel tem apenas o nome da categoria, mas pts/feito/cota estão vazios)
+                                // Identifica subtítulos (Ex: "Monitoria (Média semanal)", onde só tem a categoria preenchida e o resto vazio)
                                 const isSubHeader = (item.pts === "" && item.feito === "" && item.cota === "");
 
                                 if (isSubHeader) {
@@ -694,7 +701,7 @@ export default function CsatApp() {
                                   );
                                 }
 
-                                // Linhas normais de dados
+                                // Linhas normais de pontuação
                                 return (
                                   <tr key={idx} className="hover:bg-black/5 transition-colors" style={{ borderColor: t.border }}>
                                     <td className="px-4 py-3 font-medium" style={{ color: t.text }}>{item.cat}</td>
