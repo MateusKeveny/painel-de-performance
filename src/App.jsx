@@ -275,7 +275,7 @@ export default function CsatApp() {
     return allRecords;
   }, [allRecords, isAdmin, selectedAgent]);
 
-  // --- NOVA REGRA EXATA DO EXCEL: SOMA APENAS OS OPERADORES COM MÉDIA MENSAL > 0% ---
+  // --- MATEMÁTICA CORRIGIDA: EXCLUI OPERADORES COM MENOS DE 5 AVALIAÇÕES DA MÉDIA GERAL ---
 
   const allAgentsMap = useMemo(() => {
     const stats = {};
@@ -294,9 +294,9 @@ export default function CsatApp() {
     }));
   }, [allRecords]);
 
-  // Filtra estritamente apenas quem tem C-SAT > 0% no mês (exclui os zerados do cálculo da média geral)
+  // Filtra apenas operadores que possuem pelo menos 5 avaliações no mês (excluindo os outliers de baixo volume como lufreire)
   const validGlobalAgents = useMemo(() => {
-    return allAgentsMap.filter(a => a.pct > 0);
+    return allAgentsMap.filter(a => a.total >= 5);
   }, [allAgentsMap]);
 
   const validEmailsSet = useMemo(() => {
@@ -310,7 +310,7 @@ export default function CsatApp() {
     return displayRecords;
   }, [displayRecords, isAdmin, selectedAgent, validEmailsSet]);
 
-  // MÉDIA DA EQUIPE (Média aritmética apenas dos operadores com C-SAT > 0%)
+  // MÉDIA DA EQUIPE (Média Aritmética apenas dos operadores oficiais com volume >= 5)
   const liveTeamAvg = useMemo(() => {
     if (!isAdmin) return 82.93; 
     if (validGlobalAgents.length === 0) return 0;
@@ -331,10 +331,11 @@ export default function CsatApp() {
 
   const agentsStats = useMemo(() => {
     if (!isAdmin || selectedAgent !== "ALL") return [];
-    return validGlobalAgents.sort((a, b) => b.pct - a.pct);
-  }, [isAdmin, selectedAgent, validGlobalAgents]);
+    // No ranking visual mostramos todos para controle do gestor, mas a média geral já descontou os pequenos
+    return allAgentsMap.sort((a, b) => b.pct - a.pct);
+  }, [isAdmin, selectedAgent, allAgentsMap]);
 
-  // DESEMPENHO SEMANAL (Média apenas dos operadores que tiveram chamados válidos > 0% na semana)
+  // DESEMPENHO SEMANAL (Média dos operadores oficiais por semana)
   const weeklyStats = useMemo(() => {
     const stats = {
       1: { name: "1ª Semana", label: "26/07 a 02/08", agents: {} },
@@ -345,7 +346,7 @@ export default function CsatApp() {
     
     allRecords.forEach(r => {
       const weekId = getMetrificationWeek(r.data);
-      if (weekId && isValidRecord(r)) {
+      if (weekId && isValidRecord(r) && validEmailsSet.has(r.atendente)) {
         if (!stats[weekId].agents[r.atendente]) stats[weekId].agents[r.atendente] = { total: 0, pos: 0 };
         stats[weekId].agents[r.atendente].total += 1;
         if (Number(r.avaliacao) >= 4) stats[weekId].agents[r.atendente].pos += 1;
@@ -353,22 +354,18 @@ export default function CsatApp() {
     });
     
     return Object.values(stats).map(w => {
-      // Pega apenas os agentes daquela semana que tiveram C-SAT > 0%
-      const agentsInWeek = Object.values(w.agents).map(a => ({
-        pct: (a.pos / a.total) * 100,
-        total: a.total
-      })).filter(a => a.pct > 0);
-      
+      const agentsInWeek = Object.values(w.agents);
       let weekPct = 0;
+      
       if (agentsInWeek.length > 0) {
-         const sumPcts = agentsInWeek.reduce((sum, a) => sum + a.pct, 0);
+         const sumPcts = agentsInWeek.reduce((sum, a) => sum + ((a.pos / a.total) * 100), 0);
          weekPct = sumPcts / agentsInWeek.length;
       }
       
       const totalCalls = agentsInWeek.reduce((sum, a) => sum + a.total, 0);
       return { name: w.name, label: w.label, total: totalCalls, pct: weekPct, hasData: agentsInWeek.length > 0 };
     });
-  }, [allRecords]);
+  }, [allRecords, validEmailsSet]);
 
   // --- FIM DA LÓGICA ---
 
