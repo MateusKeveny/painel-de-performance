@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Moon, Sun, LogOut, User, Loader2, List, ArrowLeft, CheckCircle2, Lock, Mail, ArrowUpDown, Shield } from "lucide-react";
+import { Moon, Sun, LogOut, User, Loader2, List, ArrowLeft, CheckCircle2, Lock, Mail, ArrowUpDown, Shield, Calendar, Target, Award, TrendingUp, Inbox } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = "https://uahkplwssonbxzydjytb.supabase.co";
@@ -31,24 +31,15 @@ const tokens = {
 };
 
 function PerformanceChart({ weeklyData, t, teamAvg }) {
-  const width = 500;
-  const height = 250;
-  const paddingX = 50;
-  const paddingY = 40;
-  
-  const chartW = width - paddingX * 2;
-  const chartH = height - paddingY * 2;
-
+  const width = 500; const height = 250; const paddingX = 50; const paddingY = 40;
+  const chartW = width - paddingX * 2; const chartH = height - paddingY * 2;
   const goalY = paddingY + chartH - ((GOAL / 100) * chartH);
   const avgY = paddingY + chartH - ((teamAvg / 100) * chartH); 
-
   const xStep = chartW / 3;
-  const points = weeklyData.map((w, i) => {
-    const x = paddingX + (i * xStep);
-    const y = paddingY + chartH - ((w.pct / 100) * chartH);
-    return { x, y, pct: w.pct, name: w.name, label: w.label, hasData: w.hasData };
-  });
-
+  
+  const points = weeklyData.map((w, i) => ({
+    x: paddingX + (i * xStep), y: paddingY + chartH - ((w.pct / 100) * chartH), pct: w.pct, name: w.name, label: w.label, hasData: w.hasData
+  }));
   const validPoints = points.filter(p => p.hasData);
   const pathD = validPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(" ");
 
@@ -56,17 +47,11 @@ function PerformanceChart({ weeklyData, t, teamAvg }) {
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
       <line x1={paddingX} y1={paddingY - 10} x2={paddingX} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
       <line x1={paddingX} y1={height - paddingY} x2={width - paddingX + 10} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
-
       <line x1={paddingX} y1={avgY} x2={width - paddingX + 10} y2={avgY} stroke={t.textSoft} strokeWidth="2" strokeDasharray="4,4" opacity="0.6" />
-      <text x={width - paddingX + 18} y={avgY + 4} fill={t.textSoft} fontSize="11" fontWeight="600" style={{ fontFamily: "'Montserrat', sans-serif" }}>Média ({fmtPct(teamAvg)})</text>
-
+      <text x={width - paddingX + 18} y={avgY + 4} fill={t.textSoft} fontSize="11" fontWeight="600" style={{ fontFamily: "'Montserrat', sans-serif" }}>Média</text>
       <line x1={paddingX} y1={goalY} x2={width - paddingX + 10} y2={goalY} stroke={t.warn} strokeWidth="2" strokeDasharray="6,6" />
       <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>Meta 95%</text>
-
-      {validPoints.length > 1 && (
-        <path d={pathD} fill="none" stroke={t.accent} strokeWidth="3" opacity="0.5" />
-      )}
-
+      {validPoints.length > 1 && <path d={pathD} fill="none" stroke={t.accent} strokeWidth="3" opacity="0.5" />}
       {points.map((p, i) => (
         <g key={i}>
           <text x={p.x} y={height - paddingY + 20} textAnchor="middle" fontSize="11" fill={t.textSoft} fontWeight="600" style={{ fontFamily: "'Inter', sans-serif" }}>{p.name}</text>
@@ -84,43 +69,40 @@ function PerformanceChart({ weeklyData, t, teamAvg }) {
   );
 }
 
-function TeamBarChart({ data, t, goal, teamAvg }) {
+function TeamBarChart({ data, t, goal, isCotas = false }) {
   const width = Math.max(600, data.length * 80 + 100);
-  const height = 280;
-  const paddingX = 50;
-  const paddingY = 40;
-
-  const chartW = width - paddingX * 2;
-  const chartH = height - paddingY * 2;
-
-  const goalY = paddingY + chartH - ((goal / 100) * chartH);
-  const avgY = paddingY + chartH - ((teamAvg / 100) * chartH);
-
+  const height = 280; const paddingX = 50; const paddingY = 40;
+  const chartW = width - paddingX * 2; const chartH = height - paddingY * 2;
   const step = chartW / Math.max(data.length, 1);
   const barWidth = Math.min(40, step * 0.6);
+
+  const maxVal = isCotas ? Math.max(...data.map(d => d.val), 1) : 100;
 
   return (
     <div className="w-full overflow-x-auto pb-2">
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto min-w-[600px] overflow-visible">
         <line x1={paddingX} y1={paddingY - 10} x2={paddingX} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
         <line x1={paddingX} y1={height - paddingY} x2={width - paddingX + 10} y2={height - paddingY} stroke={t.textSoft} strokeWidth="3" strokeLinecap="round" />
-
-        <line x1={paddingX} y1={avgY} x2={width - paddingX + 10} y2={avgY} stroke={t.textSoft} strokeWidth="2" strokeDasharray="4,4" opacity="0.6" />
-        <text x={width - paddingX + 18} y={avgY + 4} fill={t.textSoft} fontSize="11" fontWeight="600" style={{ fontFamily: "'Montserrat', sans-serif" }}>Média</text>
-
-        <line x1={paddingX} y1={goalY} x2={width - paddingX + 10} y2={goalY} stroke={t.warn} strokeWidth="2" strokeDasharray="6,6" />
-        <text x={width - paddingX + 18} y={goalY + 4} fill={t.warn} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>Meta 95%</text>
+        
+        {!isCotas && (
+          <>
+            <line x1={paddingX} y1={paddingY + chartH - ((goal / 100) * chartH)} x2={width - paddingX + 10} y2={paddingY + chartH - ((goal / 100) * chartH)} stroke={t.warn} strokeWidth="2" strokeDasharray="6,6" />
+            <text x={width - paddingX + 18} y={paddingY + chartH - ((goal / 100) * chartH) + 4} fill={t.warn} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>Meta 95%</text>
+          </>
+        )}
 
         {data.map((d, i) => {
           const x = paddingX + (i * step) + (step / 2) - (barWidth / 2);
-          const barH = (d.pct / 100) * chartH;
+          const barH = (d.val / maxVal) * chartH;
           const y = paddingY + chartH - barH;
           return (
             <g key={i}>
-              <rect x={x} y={y} width={barWidth} height={barH} fill={d.pct >= goal ? t.accent : t.warn} rx="4" opacity="0.9" />
-              <text x={x + barWidth / 2} y={y - 8} textAnchor="middle" fill={t.text} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>{fmtPct(d.pct)}</text>
+              <rect x={x} y={y} width={barWidth} height={barH} fill={(!isCotas && d.val >= goal) ? t.accent : (isCotas ? t.accent : t.warn)} rx="4" opacity="0.9" />
+              <text x={x + barWidth / 2} y={y - 8} textAnchor="middle" fill={t.text} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                {isCotas ? d.val.toLocaleString('pt-BR') : fmtPct(d.val)}
+              </text>
               <text x={x + barWidth / 2} y={height - paddingY + 20} textAnchor="middle" fill={t.textSoft} fontSize="11" style={{ fontFamily: "'Inter', sans-serif" }}>{d.name}</text>
-              <text x={x + barWidth / 2} y={height - paddingY + 34} textAnchor="middle" fill={t.textSoft} fontSize="9" opacity="0.7" style={{ fontFamily: "'Inter', sans-serif" }}>{d.total} av</text>
+              {!isCotas && <text x={x + barWidth / 2} y={height - paddingY + 34} textAnchor="middle" fill={t.textSoft} fontSize="9" opacity="0.7" style={{ fontFamily: "'Inter', sans-serif" }}>{d.total} av</text>}
             </g>
           );
         })}
@@ -129,7 +111,7 @@ function TeamBarChart({ data, t, goal, teamAvg }) {
   );
 }
 
-const getMetrificationWeek = (dateString) => {
+const getMetrificationWeek = (dateString, selectedMonth) => {
   if (!dateString) return null;
   let d, m, y;
   const cleanDate = dateString.split('T')[0].split(' ')[0];
@@ -138,16 +120,27 @@ const getMetrificationWeek = (dateString) => {
   else return null;
 
   const month = parseInt(m, 10);
+  const year = parseInt(y, 10);
   const day = parseInt(d, 10);
-  if ((month === 7 && day >= 26) || (month === 8 && day <= 2)) return 1;
-  if (month === 8 && day >= 3 && day <= 10) return 2;
-  if (month === 8 && day >= 11 && day <= 18) return 3;
-  if (month === 8 && day >= 19 && day <= 25) return 4;
-  return null;
+
+  const [selYear, selMonth] = selectedMonth.split('-').map(Number);
+  if (year !== selYear || month !== selMonth) return null;
+
+  if (month === 8) {
+    if ((day >= 26 && month === 7) || (month === 8 && day <= 2)) return 1;
+    if (day >= 3 && day <= 10) return 2;
+    if (day >= 11 && day <= 18) return 3;
+    if (day >= 19 && day <= 25) return 4;
+  }
+  
+  if (day <= 7) return 1;
+  if (day <= 14) return 2;
+  if (day <= 21) return 3;
+  return 4;
 };
 
-const isValidRecord = (r) => {
-  if (getMetrificationWeek(r.data) === null) return false;
+const isValidRecord = (r, selectedMonth) => {
+  if (getMetrificationWeek(r.data, selectedMonth) === null) return false;
   const val = Number(r.avaliacao);
   return [1, 2, 3, 4, 5].includes(val);
 };
@@ -165,7 +158,9 @@ export default function CsatApp() {
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   
   const [allRecords, setAllRecords] = useState([]);
-  const [view, setView] = useState("dashboard");
+  const [cotasRecords, setCotasRecords] = useState([]); // Base de dados real das cotas
+  const [view, setView] = useState("dashboard"); 
+  const [selectedMonth, setSelectedMonth] = useState("2026-08"); 
   const [savingId, setSavingId] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'data', direction: 'desc' });
   const [selectedAgent, setSelectedAgent] = useState("ALL");
@@ -191,16 +186,13 @@ export default function CsatApp() {
     let mounted = true;
     (async () => {
       setLoading(true);
+      
+      // 1. Busca Atendimentos
       let allFetchedData = [];
-      let from = 0;
-      const step = 1000;
-      let hasMore = true;
-
+      let from = 0; const step = 1000; let hasMore = true;
       while (hasMore) {
         let query = supabase.from('atendimentos')
           .select('*')
-          .gte('data', '2026-07-25')
-          .lte('data', '2026-08-31')
           .order('criado_em', { ascending: false })
           .order('id', { ascending: true }) 
           .range(from, from + step - 1);
@@ -211,7 +203,6 @@ export default function CsatApp() {
         
         const { data, error } = await query;
         if (error) break;
-        
         if (data && data.length > 0) {
           allFetchedData = [...allFetchedData, ...data];
           from += step;
@@ -220,8 +211,24 @@ export default function CsatApp() {
           hasMore = false;
         }
       }
+
+      // 2. Busca Cotas Sincronizadas
+      let cotasData = [];
+      try {
+        let cotasQuery = supabase.from('cotas').select('*');
+        // Se for operador comum, puxa só a dele (camada extra de segurança)
+        if (!ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
+          cotasQuery = cotasQuery.eq('atendente', session.user.email);
+        }
+        const { data: cData } = await cotasQuery;
+        if (cData) cotasData = cData;
+      } catch (e) {
+        console.error("Erro ao buscar cotas:", e);
+      }
+
       if (mounted) {
         setAllRecords(allFetchedData);
+        setCotasRecords(cotasData);
         setLoading(false);
       }
     })();
@@ -229,9 +236,7 @@ export default function CsatApp() {
   }, [session, needsPasswordChange]);
 
   const handleLogin = async (e) => {
-    e.preventDefault();
-    setAuthLoading(true);
-    setAuthError("");
+    e.preventDefault(); setAuthLoading(true); setAuthError("");
     const { error } = await supabase.auth.signInWithPassword({ email: emailInput.trim(), password: passwordInput });
     if (error) setAuthError("E-mail ou senha inválidos.");
     else if (passwordInput === DEFAULT_PASSWORD) setNeedsPasswordChange(true);
@@ -239,8 +244,7 @@ export default function CsatApp() {
   };
 
   const handlePasswordChange = async (e) => {
-    e.preventDefault();
-    setAuthError("");
+    e.preventDefault(); setAuthError("");
     if (newPassword !== confirmNewPassword) return setAuthError("As senhas não coincidem.");
     if (newPassword.length < 6) return setAuthError("A senha precisa ter pelo menos 6 caracteres.");
     setAuthLoading(true);
@@ -252,10 +256,7 @@ export default function CsatApp() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setNeedsPasswordChange(false);
-    setEmailInput("");
-    setPasswordInput("");
-    setSelectedAgent("ALL");
+    setNeedsPasswordChange(false); setEmailInput(""); setPasswordInput(""); setSelectedAgent("ALL");
   };
 
   const saveRetorno = async (id, newValue) => {
@@ -275,67 +276,47 @@ export default function CsatApp() {
     return allRecords;
   }, [allRecords, isAdmin, selectedAgent]);
 
-  // --- MATEMÁTICA CORRIGIDA: EXCLUI OPERADORES COM MENOS DE 5 AVALIAÇÕES DA MÉDIA GERAL ---
-
+  // --- MATEMÁTICA C-SAT ---
   const allAgentsMap = useMemo(() => {
     const stats = {};
-    allRecords.filter(isValidRecord).forEach(r => {
+    allRecords.filter(r => isValidRecord(r, selectedMonth)).forEach(r => {
       const agent = r.atendente;
       if (!stats[agent]) stats[agent] = { total: 0, positive: 0 };
       stats[agent].total += 1;
       if (Number(r.avaliacao) >= 4) stats[agent].positive += 1;
     });
     return Object.entries(stats).map(([agent, d]) => ({
-      email: agent,
-      name: agent.split('@')[0],
-      pct: d.total > 0 ? (d.positive / d.total) * 100 : 0,
-      total: d.total,
-      positive: d.positive
+      email: agent, name: agent.split('@')[0], pct: d.total > 0 ? (d.positive / d.total) * 100 : 0, total: d.total, positive: d.positive
     }));
-  }, [allRecords]);
+  }, [allRecords, selectedMonth]);
 
-  // Filtra apenas operadores que possuem pelo menos 5 avaliações no mês (excluindo os outliers de baixo volume como lufreire)
-  const validGlobalAgents = useMemo(() => {
-    return allAgentsMap.filter(a => a.total >= 5);
-  }, [allAgentsMap]);
-
-  const validEmailsSet = useMemo(() => {
-    return new Set(validGlobalAgents.map(a => a.email));
-  }, [validGlobalAgents]);
+  const validGlobalAgents = useMemo(() => allAgentsMap.filter(a => a.total >= 5), [allAgentsMap]);
+  const validEmailsSet = useMemo(() => new Set(validGlobalAgents.map(a => a.email)), [validGlobalAgents]);
 
   const effectiveRecords = useMemo(() => {
-    if (isAdmin && selectedAgent === "ALL") {
-      return displayRecords.filter(r => validEmailsSet.has(r.atendente));
-    }
+    if (isAdmin && selectedAgent === "ALL") return displayRecords.filter(r => validEmailsSet.has(r.atendente));
     return displayRecords;
   }, [displayRecords, isAdmin, selectedAgent, validEmailsSet]);
 
-  // MÉDIA DA EQUIPE (Média Aritmética apenas dos operadores oficiais com volume >= 5)
   const liveTeamAvg = useMemo(() => {
     if (!isAdmin) return 82.93; 
     if (validGlobalAgents.length === 0) return 0;
-    
-    const sumOfPcts = validGlobalAgents.reduce((sum, a) => sum + a.pct, 0);
-    return sumOfPcts / validGlobalAgents.length;
+    return validGlobalAgents.reduce((sum, a) => sum + a.pct, 0) / validGlobalAgents.length;
   }, [validGlobalAgents, isAdmin]);
 
   const myPct = useMemo(() => {
     if (isAdmin && selectedAgent === "ALL") return liveTeamAvg;
-    
-    const validRecords = effectiveRecords.filter(isValidRecord);
+    const validRecords = effectiveRecords.filter(r => isValidRecord(r, selectedMonth));
     if (validRecords.length === 0) return 0;
-    
-    const positiveRecords = validRecords.filter(r => Number(r.avaliacao) >= 4);
-    return (positiveRecords.length / validRecords.length) * 100;
-  }, [effectiveRecords, isAdmin, selectedAgent, liveTeamAvg]);
+    const pos = validRecords.filter(r => Number(r.avaliacao) >= 4);
+    return (pos.length / validRecords.length) * 100;
+  }, [effectiveRecords, isAdmin, selectedAgent, liveTeamAvg, selectedMonth]);
 
   const agentsStats = useMemo(() => {
     if (!isAdmin || selectedAgent !== "ALL") return [];
-    // No ranking visual mostramos todos para controle do gestor, mas a média geral já descontou os pequenos
     return allAgentsMap.sort((a, b) => b.pct - a.pct);
   }, [isAdmin, selectedAgent, allAgentsMap]);
 
-  // DESEMPENHO SEMANAL (Média dos operadores oficiais por semana)
   const weeklyStats = useMemo(() => {
     const stats = {
       1: { name: "1ª Semana", label: "26/07 a 02/08", agents: {} },
@@ -343,31 +324,24 @@ export default function CsatApp() {
       3: { name: "3ª Semana", label: "11/08 a 18/08", agents: {} },
       4: { name: "4ª Semana", label: "19/08 a 25/08", agents: {} },
     };
-    
     allRecords.forEach(r => {
-      const weekId = getMetrificationWeek(r.data);
-      if (weekId && isValidRecord(r) && validEmailsSet.has(r.atendente)) {
+      const weekId = getMetrificationWeek(r.data, selectedMonth);
+      if (weekId && isValidRecord(r, selectedMonth) && validEmailsSet.has(r.atendente)) {
         if (!stats[weekId].agents[r.atendente]) stats[weekId].agents[r.atendente] = { total: 0, pos: 0 };
         stats[weekId].agents[r.atendente].total += 1;
         if (Number(r.avaliacao) >= 4) stats[weekId].agents[r.atendente].pos += 1;
       }
     });
-    
     return Object.values(stats).map(w => {
       const agentsInWeek = Object.values(w.agents);
       let weekPct = 0;
-      
       if (agentsInWeek.length > 0) {
          const sumPcts = agentsInWeek.reduce((sum, a) => sum + ((a.pos / a.total) * 100), 0);
          weekPct = sumPcts / agentsInWeek.length;
       }
-      
-      const totalCalls = agentsInWeek.reduce((sum, a) => sum + a.total, 0);
-      return { name: w.name, label: w.label, total: totalCalls, pct: weekPct, hasData: agentsInWeek.length > 0 };
+      return { name: w.name, label: w.label, total: agentsInWeek.reduce((sum, a) => sum + a.total, 0), pct: weekPct, hasData: agentsInWeek.length > 0 };
     });
-  }, [allRecords, validEmailsSet]);
-
-  // --- FIM DA LÓGICA ---
+  }, [allRecords, selectedMonth, validEmailsSet]);
 
   const handleSort = (key) => {
     setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
@@ -384,6 +358,34 @@ export default function CsatApp() {
       return 0;
     });
   }, [displayRecords, sortConfig]);
+
+  // --- PREPARAÇÃO DOS DADOS REAIS DE COTAS ---
+  
+  // 1. Ranking de Cotas da Equipe (Se for admin vendo "ALL")
+  const cotasRanking = useMemo(() => {
+    return cotasRecords
+      .filter(c => c.mes_referencia === selectedMonth)
+      .map(c => ({
+        name: c.atendente.split('@')[0],
+        val: Number(c.resultado_final) || 0,
+        total: 0
+      }))
+      .sort((a, b) => b.val - a.val);
+  }, [cotasRecords, selectedMonth]);
+
+  // 2. Tabela individual de Cotas
+  const { currentAgentCotaTable, currentAgentCotaFinal } = useMemo(() => {
+    let targetEmail = session?.user?.email;
+    if (isAdmin && selectedAgent !== "ALL") targetEmail = selectedAgent;
+    
+    const agentCotaData = cotasRecords.find(c => c.atendente === targetEmail && c.mes_referencia === selectedMonth);
+    
+    return {
+      currentAgentCotaTable: agentCotaData?.dados_tabela || [],
+      currentAgentCotaFinal: agentCotaData?.resultado_final || 0
+    };
+  }, [cotasRecords, selectedMonth, isAdmin, selectedAgent, session]);
+
 
   if (!session) {
     return (
@@ -445,14 +447,47 @@ export default function CsatApp() {
       <style>{FONTS}</style>
       <div className="min-h-full w-full max-w-7xl mx-auto p-4 sm:p-8">
         
-        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between mb-12 w-full px-6 py-4 rounded-2xl border shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+        {/* CABEÇALHO */}
+        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between mb-10 w-full px-6 py-4 rounded-2xl border shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
+          
+          <div className="flex items-center gap-4 w-full lg:w-auto flex-wrap">
             <div className="p-2 rounded-xl transition-colors duration-300 flex-shrink-0" style={{ backgroundColor: t.accentSoft }}>
               <img src="https://igreenenergy.com.br/wp-content/uploads/2023/11/logo_igreen-1-e1704289874457.png" alt="iGreen Logo" className="h-8 object-contain" onError={(e) => e.target.style.display='none'} />
             </div>
+
+            <div className="flex items-center bg-black/10 dark:bg-white/5 p-1 rounded-xl border" style={{ borderColor: t.border }}>
+              <button 
+                onClick={() => setView("dashboard")} 
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${view === 'dashboard' || view === 'list' ? 'bg-[#1F9D6B] text-white shadow-md' : ''}`}
+                style={{ color: view !== 'dashboard' && view !== 'list' ? t.textSoft : '#FFFFFF' }}
+              >
+                <Target size={14} /> C-SAT
+              </button>
+              <button 
+                onClick={() => setView("cotas")} 
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${view === 'cotas' ? 'bg-[#1F9D6B] text-white shadow-md' : ''}`}
+                style={{ color: view !== 'cotas' ? t.textSoft : '#FFFFFF' }}
+              >
+                <Award size={14} /> Cotas & Metas
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 border px-3 py-2 rounded-xl" style={{ backgroundColor: t.panel2, borderColor: t.border }}>
+              <Calendar size={16} color={t.accent} />
+              <select 
+                value={selectedMonth} 
+                onChange={(e) => setSelectedMonth(e.target.value)} 
+                className="bg-transparent text-sm font-semibold outline-none cursor-pointer"
+                style={{ color: t.text }}
+              >
+                <option value="2026-07">Julho / 2026</option>
+                <option value="2026-08">Agosto / 2026</option>
+                <option value="2026-09">Setembro / 2026</option>
+              </select>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
+          <div className="flex items-center gap-3 w-full lg:w-auto justify-end flex-wrap">
             {isAdmin && (
               <div className="flex items-center gap-2 border px-3 py-2 rounded-xl" style={{ backgroundColor: t.panel2, borderColor: t.border }}>
                 <Shield size={16} color={t.warn} />
@@ -483,15 +518,13 @@ export default function CsatApp() {
         ) : (
           <div className="w-full">
             
+            {/* --- ABA: C-SAT --- */}
             {view === "dashboard" && (
               <div className="flex flex-col lg:flex-row gap-12 w-full animate-in fade-in duration-500 items-start">
-                
-                {/* LADO ESQUERDO */}
                 <div className="flex flex-col flex-1 gap-6 sticky top-8">
                   <h2 className="text-3xl sm:text-4xl font-bold mb-2" style={{ fontFamily: "'Montserrat', sans-serif" }}>
                     {isAdmin && selectedAgent === "ALL" ? "Painel da Equipe" : "Painel de Performance"}
                   </h2>
-                  
                   <div className="flex flex-col gap-1">
                     <div className="text-xl flex items-center gap-2">
                       <span className="w-48 transition-colors duration-300 font-medium" style={{ color: t.textSoft }}>
@@ -501,7 +534,6 @@ export default function CsatApp() {
                         {fmtPct(myPct)}
                       </span>
                     </div>
-                    
                     {(!isAdmin || selectedAgent !== "ALL") && (
                       <div className="text-xl flex items-center gap-2">
                         <span className="w-48 transition-colors duration-300 font-medium" style={{ color: t.textSoft }}>Média da Equipe:</span> 
@@ -511,23 +543,20 @@ export default function CsatApp() {
                       </div>
                     )}
                   </div>
-                  
                   <button onClick={() => setView("list")} className="px-8 py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all mt-4 w-full md:w-auto" style={{ backgroundColor: t.accent, fontFamily: "'Montserrat', sans-serif" }}>
                     <List size={18} /> Detalhar Atendimentos
                   </button>
                 </div>
 
-                {/* LADO DIREITO */}
                 <div className="flex flex-col flex-[2] gap-8 w-full">
                   <div className="w-full border rounded-[2rem] p-6 shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
-                    <h3 className="text-center font-bold mb-6 text-lg" style={{ fontFamily: "'Montserrat', sans-serif" }}>Desempenho Semanal</h3>
+                    <h3 className="text-center font-bold mb-6 text-lg" style={{ fontFamily: "'Montserrat', sans-serif" }}>Desempenho Semanal ({selectedMonth})</h3>
                     <PerformanceChart weeklyData={weeklyStats} t={t} teamAvg={liveTeamAvg} />
                   </div>
-
                   {isAdmin && selectedAgent === "ALL" && agentsStats.length > 0 && (
                     <div className="w-full border rounded-[2rem] p-6 shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
-                      <h3 className="text-center font-bold mb-6 text-lg" style={{ fontFamily: "'Montserrat', sans-serif" }}>Ranking da Equipe (C-SAT Atual)</h3>
-                      <TeamBarChart data={agentsStats} t={t} goal={GOAL} teamAvg={liveTeamAvg} />
+                      <h3 className="text-center font-bold mb-6 text-lg" style={{ fontFamily: "'Montserrat', sans-serif" }}>Ranking da Equipe ({selectedMonth})</h3>
+                      <TeamBarChart data={agentsStats.map(a => ({ name: a.name, val: a.pct, total: a.total }))} t={t} goal={GOAL} />
                     </div>
                   )}
                 </div>
@@ -540,28 +569,17 @@ export default function CsatApp() {
                   <button onClick={() => setView("dashboard")} className="px-4 py-2 border rounded-xl flex items-center gap-2 hover:opacity-80 transition-colors duration-300 font-medium" style={{ backgroundColor: t.panel, borderColor: t.border, color: t.textSoft, fontFamily: "'Montserrat', sans-serif" }}>
                     <ArrowLeft size={16} /> Voltar ao Painel
                   </button>
-                  <div className="text-sm transition-colors duration-300" style={{ color: t.textSoft }}>Exibindo <strong>{displayRecords.length}</strong> chamados</div>
+                  <div className="text-sm transition-colors duration-300" style={{ color: t.textSoft }}>Exibindo <strong>{displayRecords.length}</strong> chamados no período</div>
                 </div>
-
                 <div className="border rounded-2xl overflow-hidden w-full shadow-sm transition-colors duration-300" style={{ backgroundColor: t.panel, borderColor: t.border }}>
                   <div className="overflow-x-auto w-full">
                     <table className="w-full text-sm text-left">
                       <thead className="border-b transition-colors duration-300" style={{ backgroundColor: t.panel2, borderColor: t.border, color: t.textSoft }}>
                         <tr>
-                          {isAdmin && selectedAgent === "ALL" && (
-                            <th className="p-4 font-semibold cursor-pointer hover:opacity-70 transition-opacity" onClick={() => handleSort('atendente')}>
-                              <div className="flex items-center gap-1">Operador <ArrowUpDown size={14} /></div>
-                            </th>
-                          )}
-                          <th className="p-4 font-semibold cursor-pointer hover:opacity-70 transition-opacity" onClick={() => handleSort('protocolo')}>
-                            <div className="flex items-center gap-1">Protocolo <ArrowUpDown size={14} /></div>
-                          </th>
-                          <th className="p-4 font-semibold cursor-pointer hover:opacity-70 transition-opacity" onClick={() => handleSort('data')}>
-                            <div className="flex items-center gap-1">Data <ArrowUpDown size={14} /></div>
-                          </th>
-                          <th className="p-4 font-semibold text-center cursor-pointer hover:opacity-70 transition-opacity" onClick={() => handleSort('avaliacao')}>
-                            <div className="flex items-center justify-center gap-1">Nota <ArrowUpDown size={14} /></div>
-                          </th>
+                          {isAdmin && selectedAgent === "ALL" && <th className="p-4 font-semibold cursor-pointer hover:opacity-70 transition-opacity" onClick={() => handleSort('atendente')}><div className="flex items-center gap-1">Operador <ArrowUpDown size={14} /></div></th>}
+                          <th className="p-4 font-semibold cursor-pointer hover:opacity-70 transition-opacity" onClick={() => handleSort('protocolo')}><div className="flex items-center gap-1">Protocolo <ArrowUpDown size={14} /></div></th>
+                          <th className="p-4 font-semibold cursor-pointer hover:opacity-70 transition-opacity" onClick={() => handleSort('data')}><div className="flex items-center gap-1">Data <ArrowUpDown size={14} /></div></th>
+                          <th className="p-4 font-semibold text-center cursor-pointer hover:opacity-70 transition-opacity" onClick={() => handleSort('avaliacao')}><div className="flex items-center justify-center gap-1">Nota <ArrowUpDown size={14} /></div></th>
                           <th className="p-4 font-semibold w-1/3">Tabulação (Análise)</th>
                           <th className="p-4 font-semibold w-64">Protocolo de Retorno</th>
                         </tr>
@@ -573,25 +591,18 @@ export default function CsatApp() {
                           if (val === 1 || val === 2) badgeStyle = { backgroundColor: t.danger + "20", color: t.danger, borderColor: t.danger + "50" };
                           else if (val === 3) badgeStyle = { backgroundColor: t.warn + "20", color: t.warn, borderColor: t.warn + "50" };
                           else if (val === 4 || val === 5) badgeStyle = { backgroundColor: t.accentSoft, color: t.accent, borderColor: t.accent };
-
                           return (
                             <tr key={r.id} className="border-b hover:bg-black/5 transition-colors duration-300" style={{ borderColor: t.border }}>
-                              {isAdmin && selectedAgent === "ALL" && (
-                                <td className="p-4 font-medium opacity-80">{r.atendente.split('@')[0]}</td>
-                              )}
+                              {isAdmin && selectedAgent === "ALL" && <td className="p-4 font-medium opacity-80">{r.atendente.split('@')[0]}</td>}
                               <td className="p-4 font-medium" style={{ fontFamily: "'Montserrat', sans-serif" }}>{r.protocolo}</td>
                               <td className="p-4 whitespace-nowrap">{r.data}</td>
-                              <td className="p-4 text-center">
-                                <span className="px-3 py-1 rounded-md border font-bold text-sm" style={{ ...badgeStyle, fontFamily: "'Montserrat', sans-serif" }}>{r.avaliacao}</span>
-                              </td>
+                              <td className="p-4 text-center"><span className="px-3 py-1 rounded-md border font-bold text-sm" style={{ ...badgeStyle, fontFamily: "'Montserrat', sans-serif" }}>{r.avaliacao}</span></td>
                               <td className="p-4 transition-colors duration-300" style={{ color: t.textSoft }}><div className="line-clamp-2 text-xs">{r.tabulacao || "—"}</div></td>
                               <td className="p-4">
                                 <div className="relative">
                                   <input 
                                     value={r.protocolo_retorno || ""}
-                                    onChange={(e) => {
-                                      setAllRecords(prev => prev.map(rec => rec.id === r.id ? { ...rec, protocolo_retorno: e.target.value } : rec))
-                                    }}
+                                    onChange={(e) => { setAllRecords(prev => prev.map(rec => rec.id === r.id ? { ...rec, protocolo_retorno: e.target.value } : rec)) }}
                                     onBlur={(e) => saveRetorno(r.id, e.target.value)}
                                     placeholder="Digite e clique fora..."
                                     className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-1 transition-colors duration-300"
@@ -606,12 +617,113 @@ export default function CsatApp() {
                       </tbody>
                     </table>
                   </div>
-                  <div className="p-4 text-xs italic border-t transition-colors duration-300" style={{ borderColor: t.border, color: t.textSoft }}>
-                    * Notas 0, -1 e vazias não impactam no resultado final
-                  </div>
                 </div>
               </div>
             )}
+
+            {/* --- ABA 3: COTAS E METAS REAIS (LIGADAS AO SUPABASE) --- */}
+            {view === "cotas" && (
+              <div className="w-full animate-in fade-in duration-300 flex flex-col gap-6">
+                
+                {isAdmin && selectedAgent === "ALL" ? (
+                  <div className="flex flex-col gap-8 w-full">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-3xl font-bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>Ranking de Cotas</h2>
+                        <p className="text-sm mt-1" style={{ color: t.textSoft }}>Desempenho financeiro e pontuações de {selectedMonth}</p>
+                      </div>
+                    </div>
+
+                    <div className="border rounded-[2rem] p-8 shadow-sm transition-colors duration-300 w-full" style={{ backgroundColor: t.panel, borderColor: t.border }}>
+                      {cotasRanking.length > 0 ? (
+                        <TeamBarChart data={cotasRanking} t={t} isCotas={true} />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center min-h-[300px] opacity-70">
+                          <Inbox size={48} color={t.textSoft} className="mb-4" />
+                          <h3 className="text-xl font-semibold mb-2" style={{ color: t.text }}>Nenhuma cota sincronizada</h3>
+                          <p className="text-sm text-center" style={{ color: t.textSoft }}>Nenhum dado encontrado para o mês de {selectedMonth}.<br/>Rode a macro no Excel para enviar as cotas.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h2 className="text-2xl font-bold flex flex-wrap items-center gap-2" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+                          Cota Mensal: <span style={{ color: t.accent }}>{selectedAgent === "ALL" ? session.user.email.split('@')[0] : selectedAgent.split('@')[0]}</span>
+                        </h2>
+                        <p className="text-sm mt-1" style={{ color: t.textSoft }}>Resultados baseados no fechamento de {selectedMonth}</p>
+                      </div>
+                      
+                      {currentAgentCotaTable.length > 0 && (
+                        <div className="text-left sm:text-right p-4 rounded-xl border bg-black/5 dark:bg-white/5" style={{ borderColor: t.border }}>
+                          <div className="text-xs uppercase tracking-widest font-semibold mb-1" style={{ color: t.textSoft }}>Resultado Final</div>
+                          <div className="text-3xl font-bold" style={{ color: currentAgentCotaFinal < 0 ? t.danger : t.accent, fontFamily: "'Montserrat', sans-serif" }}>
+                            {currentAgentCotaFinal.toLocaleString('pt-BR')}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {currentAgentCotaTable.length > 0 ? (
+                      <div className="border rounded-2xl overflow-hidden shadow-sm transition-colors duration-300 w-full" style={{ backgroundColor: t.panel, borderColor: t.border }}>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm text-left">
+                            <thead className="border-b transition-colors duration-300" style={{ backgroundColor: t.panel2, borderColor: t.border, color: t.textSoft }}>
+                              <tr>
+                                <th className="p-4 font-semibold uppercase tracking-wider text-xs">Categoria / Métrica</th>
+                                <th className="p-4 font-semibold uppercase tracking-wider text-xs text-center w-32">Pontuação</th>
+                                <th className="p-4 font-semibold uppercase tracking-wider text-xs text-center w-32">Feito</th>
+                                <th className="p-4 font-semibold uppercase tracking-wider text-xs text-right w-32">Cota ($)</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y" style={{ borderColor: t.border }}>
+                              {currentAgentCotaTable.map((item, idx) => {
+                                // Pula linha se a categoria estiver vazia (linhas em branco do excel)
+                                if (!item.cat || item.cat.trim() === "") return null;
+
+                                // Identifica subtítulos (Quando o excel tem apenas o nome da categoria, mas pts/feito/cota estão vazios)
+                                const isSubHeader = (item.pts === "" && item.feito === "" && item.cota === "");
+
+                                if (isSubHeader) {
+                                  return (
+                                    <tr key={idx} style={{ backgroundColor: t.panel2 }}>
+                                      <td colSpan="4" className="px-4 py-2 text-xs font-bold uppercase tracking-wider" style={{ color: t.accent }}>{item.cat}</td>
+                                    </tr>
+                                  );
+                                }
+
+                                // Linhas normais de dados
+                                return (
+                                  <tr key={idx} className="hover:bg-black/5 transition-colors" style={{ borderColor: t.border }}>
+                                    <td className="px-4 py-3 font-medium" style={{ color: t.text }}>{item.cat}</td>
+                                    <td className="px-4 py-3 text-center" style={{ color: t.textSoft }}>{item.pts}</td>
+                                    <td className="px-4 py-3 text-center font-semibold" style={{ color: t.text }}>{item.feito}</td>
+                                    <td className="px-4 py-3 text-right font-bold" style={{ color: (Number(item.cota) < 0 || String(item.cota).startsWith("-")) ? t.danger : t.text, fontFamily: "'Montserrat', sans-serif" }}>
+                                      {item.cota}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : (
+                       <div className="border rounded-[2rem] p-8 shadow-sm transition-colors duration-300 flex flex-col items-center justify-center min-h-[300px]" style={{ backgroundColor: t.panel, borderColor: t.border }}>
+                        <Inbox size={48} color={t.textSoft} className="mb-4 opacity-50" />
+                        <h3 className="text-xl font-bold mb-2" style={{ fontFamily: "'Montserrat', sans-serif" }}>Sem dados para este operador</h3>
+                        <p className="text-sm text-center max-w-md" style={{ color: t.textSoft }}>
+                          Não encontramos informações de Cota para o mês de {selectedMonth}. 
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
           </div>
         )}
       </div>
