@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Moon, Sun, LogOut, User, Loader2, List, ArrowLeft, CheckCircle2, Lock, Mail, ArrowUpDown, Shield, Calendar, Target, Award, TrendingUp, Inbox } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -214,7 +214,7 @@ export default function CsatApp() {
         }
       }
 
-      // 2. Busca Cotas (Que agora trazem a coluna nome_atendente)
+      // 2. Busca Cotas (Que agora trazem o Nome Real)
       let cotasData = [];
       try {
         let cotasQuery = supabase.from('cotas').select('*');
@@ -236,7 +236,7 @@ export default function CsatApp() {
     return () => (mounted = false);
   }, [session, needsPasswordChange]);
 
-  // --- MAPA DE NOMES (Tradutor de Email para Nome Formal) ---
+  // --- TRADUTOR DE NOMES AUTOMÁTICO ---
   const agentNamesMap = useMemo(() => {
     const map = {};
     cotasRecords.forEach(c => {
@@ -247,11 +247,12 @@ export default function CsatApp() {
     return map;
   }, [cotasRecords]);
 
-  const getAgentName = (email) => {
+  const getAgentName = useCallback((email) => {
     if (!email || email === "ALL") return "Equipe";
     const lowerEmail = email.toLowerCase().trim();
+    // Se achou o nome na cota, usa. Se não, quebra o e-mail.
     return agentNamesMap[lowerEmail] || lowerEmail.split('@')[0];
-  };
+  }, [agentNamesMap]);
 
   const handleLogin = async (e) => {
     e.preventDefault(); setAuthLoading(true); setAuthError("");
@@ -289,12 +290,15 @@ export default function CsatApp() {
     return [...new Set(allRecords.map(r => r.atendente?.toLowerCase().trim()))].filter(Boolean).sort();
   }, [allRecords, isAdmin]);
 
+  // Filtra os registros com base na escolha do filtro superior
   const displayRecords = useMemo(() => {
-    if (isAdmin && selectedAgent !== "ALL") return allRecords.filter(r => r.atendente?.toLowerCase().trim() === selectedAgent.toLowerCase().trim());
+    if (isAdmin && selectedAgent !== "ALL") {
+      return allRecords.filter(r => r.atendente?.toLowerCase().trim() === selectedAgent.toLowerCase().trim());
+    }
     return allRecords;
   }, [allRecords, isAdmin, selectedAgent]);
 
-  // --- MATEMÁTICA C-SAT ---
+  // --- MATEMÁTICA C-SAT E CÁLCULO GERAL ---
   const allAgentsMap = useMemo(() => {
     const stats = {};
     allRecords.filter(r => isValidRecord(r, selectedMonth)).forEach(r => {
@@ -304,16 +308,22 @@ export default function CsatApp() {
       if (Number(r.avaliacao) >= 4) stats[agent].positive += 1;
     });
     return Object.entries(stats).map(([agent, d]) => ({
-      email: agent, name: getAgentName(agent), pct: d.total > 0 ? (d.positive / d.total) * 100 : 0, total: d.total, positive: d.positive
+      email: agent, 
+      name: agentNamesMap[agent] || agent.split('@')[0], 
+      pct: d.total > 0 ? (d.positive / d.total) * 100 : 0, 
+      total: d.total, 
+      positive: d.positive
     }));
-  }, [allRecords, selectedMonth, getAgentName]);
+  }, [allRecords, selectedMonth, agentNamesMap]);
 
   const validGlobalAgents = useMemo(() => allAgentsMap.filter(a => a.total >= 5), [allAgentsMap]);
   const validEmailsSet = useMemo(() => new Set(validGlobalAgents.map(a => a.email)), [validGlobalAgents]);
 
   const effectiveRecords = useMemo(() => {
-    if (isAdmin && selectedAgent === "ALL") return displayRecords.filter(r => validEmailsSet.has(r.atendente?.toLowerCase().trim()));
-    return displayRecords;
+    if (isAdmin && selectedAgent === "ALL") {
+       return displayRecords.filter(r => validEmailsSet.has(r.atendente?.toLowerCase().trim()));
+    }
+    return displayRecords; // Se selecionou um só, exibe ele normalmente
   }, [displayRecords, isAdmin, selectedAgent, validEmailsSet]);
 
   const liveTeamAvg = useMemo(() => {
@@ -335,6 +345,7 @@ export default function CsatApp() {
     return allAgentsMap.sort((a, b) => b.pct - a.pct);
   }, [isAdmin, selectedAgent, allAgentsMap]);
 
+  // GRÁFICO SEMANAL DESCONGELADO (AGORA LÊ effectiveRecords EM VEZ DE allRecords)
   const weeklyStats = useMemo(() => {
     const stats = {
       1: { name: "1ª Semana", label: "26/07 a 02/08", agents: {} },
@@ -342,15 +353,17 @@ export default function CsatApp() {
       3: { name: "3ª Semana", label: "11/08 a 18/08", agents: {} },
       4: { name: "4ª Semana", label: "19/08 a 25/08", agents: {} },
     };
-    allRecords.forEach(r => {
+    
+    effectiveRecords.forEach(r => {
       const weekId = getMetrificationWeek(r.data, selectedMonth);
       const emailTratado = r.atendente?.toLowerCase().trim();
-      if (weekId && isValidRecord(r, selectedMonth) && validEmailsSet.has(emailTratado)) {
+      if (weekId && isValidRecord(r, selectedMonth)) {
         if (!stats[weekId].agents[emailTratado]) stats[weekId].agents[emailTratado] = { total: 0, pos: 0 };
         stats[weekId].agents[emailTratado].total += 1;
         if (Number(r.avaliacao) >= 4) stats[weekId].agents[emailTratado].pos += 1;
       }
     });
+    
     return Object.values(stats).map(w => {
       const agentsInWeek = Object.values(w.agents);
       let weekPct = 0;
@@ -358,9 +371,15 @@ export default function CsatApp() {
          const sumPcts = agentsInWeek.reduce((sum, a) => sum + ((a.pos / a.total) * 100), 0);
          weekPct = sumPcts / agentsInWeek.length;
       }
-      return { name: w.name, label: w.label, total: agentsInWeek.reduce((sum, a) => sum + a.total, 0), pct: weekPct, hasData: agentsInWeek.length > 0 };
+      return { 
+        name: w.name, 
+        label: w.label, 
+        total: agentsInWeek.reduce((sum, a) => sum + a.total, 0), 
+        pct: weekPct, 
+        hasData: agentsInWeek.length > 0 
+      };
     });
-  }, [allRecords, selectedMonth, validEmailsSet]);
+  }, [effectiveRecords, selectedMonth]);
 
   const handleSort = (key) => {
     setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
@@ -379,7 +398,6 @@ export default function CsatApp() {
   }, [displayRecords, sortConfig]);
 
   // --- MATEMÁTICA COTAS ---
-  
   const cotasRanking = useMemo(() => {
     return cotasRecords
       .filter(c => c.mes_referencia?.trim() === selectedMonth.trim())
@@ -522,7 +540,7 @@ export default function CsatApp() {
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
             
-            {/* O NOME APARECE AQUI AGORA (Em vez do prefixo do e-mail) */}
+            {/* O NOME APARECE AQUI! Buscado diretamente do mapeamento de cotas */}
             <div className="border text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 transition-colors duration-300 font-semibold" style={{ backgroundColor: t.panel2, color: t.textSoft, borderColor: t.border, fontFamily: "'Montserrat', sans-serif" }}>
               <User size={16} /> {getAgentName(session.user.email)}
             </div>
@@ -644,7 +662,7 @@ export default function CsatApp() {
               </div>
             )}
 
-            {/* --- ABA 3: COTAS E METAS REAIS (LIGADAS AO SUPABASE) --- */}
+            {/* --- ABA 3: COTAS E METAS REAIS --- */}
             {view === "cotas" && (
               <div className="w-full animate-in fade-in duration-300 flex flex-col gap-6">
                 
