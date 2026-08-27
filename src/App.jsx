@@ -146,6 +146,7 @@ const getMetrificationWeek = (dateString) => {
   return null;
 };
 
+// VALIDADOR ESTRITO DE DADOS (Equivalente ao CONT.SES)
 const isValidRecord = (r) => {
   if (getMetrificationWeek(r.data) === null) return false;
   const val = Number(r.avaliacao);
@@ -197,7 +198,6 @@ export default function CsatApp() {
       let hasMore = true;
 
       while (hasMore) {
-        // CORREÇÃO CRÍTICA DE PAGINAÇÃO: order('id') garante que nada seja pulado se os segundos forem iguais
         let query = supabase.from('atendimentos')
           .select('*')
           .gte('data', '2026-07-25')
@@ -276,8 +276,9 @@ export default function CsatApp() {
     return allRecords;
   }, [allRecords, isAdmin, selectedAgent]);
 
-  // --- NOVA LÓGICA ESPELHADA NO EXCEL (MÉDIA DAS MÉDIAS) ---
+  // --- NOVA LÓGICA DE CÁLCULO GERAL CORRIGIDA (MÉDIA VOLUMÉTRICA) ---
 
+  // 1. Mapeia quem são os operadores zerados
   const allAgentsMap = useMemo(() => {
     const stats = {};
     allRecords.filter(isValidRecord).forEach(r => {
@@ -295,7 +296,7 @@ export default function CsatApp() {
     }));
   }, [allRecords]);
 
-  // Removemos atendentes que zeraram o CSAT (Não atingiram meta ou não tiveram chamados válidos)
+  // 2. Cria uma lista apenas com quem teve nota superior a 0%
   const validGlobalAgents = useMemo(() => {
     return allAgentsMap.filter(a => a.pct > 0);
   }, [allAgentsMap]);
@@ -304,15 +305,7 @@ export default function CsatApp() {
     return new Set(validGlobalAgents.map(a => a.email));
   }, [validGlobalAgents]);
 
-  // 1. MÉDIA DA EQUIPE (Calcula a média do % dos operadores, igual ao Excel)
-  const liveTeamAvg = useMemo(() => {
-    if (!isAdmin) return 82.93; 
-    if (validGlobalAgents.length === 0) return 0;
-    
-    const sumOfPcts = validGlobalAgents.reduce((sum, a) => sum + a.pct, 0);
-    return sumOfPcts / validGlobalAgents.length;
-  }, [validGlobalAgents, isAdmin]);
-
+  // 3. Registros Efetivos (Ignora completamente qualquer chamado dos zerados na Visão Geral)
   const effectiveRecords = useMemo(() => {
     if (isAdmin && selectedAgent === "ALL") {
       return displayRecords.filter(r => validEmailsSet.has(r.atendente));
@@ -320,7 +313,17 @@ export default function CsatApp() {
     return displayRecords;
   }, [displayRecords, isAdmin, selectedAgent, validEmailsSet]);
 
-  // 2. C-SAT CONSOLIDADO (Se for gestor olhando a equipe, mostra a Média das Médias. Se for individual, mostra o dele)
+  // 4. Média da Equipe (Cálculo Volumétrico Real: Soma todas as pos / Soma todos os válidos)
+  const liveTeamAvg = useMemo(() => {
+    if (!isAdmin) return 82.93; 
+    if (validGlobalAgents.length === 0) return 0;
+    
+    const totalPos = validGlobalAgents.reduce((sum, a) => sum + a.positive, 0);
+    const totalAv = validGlobalAgents.reduce((sum, a) => sum + a.total, 0);
+    return (totalPos / totalAv) * 100;
+  }, [validGlobalAgents, isAdmin]);
+
+  // 5. C-SAT Consolidado / Individual
   const myPct = useMemo(() => {
     if (isAdmin && selectedAgent === "ALL") return liveTeamAvg;
     
@@ -331,46 +334,42 @@ export default function CsatApp() {
     return (positiveRecords.length / validRecords.length) * 100;
   }, [effectiveRecords, isAdmin, selectedAgent, liveTeamAvg]);
 
-  // 3. RANKING (Apenas operadores com nota positiva)
+  // 6. Ranking do Gestor
   const agentsStats = useMemo(() => {
     if (!isAdmin || selectedAgent !== "ALL") return [];
     return validGlobalAgents.sort((a, b) => b.pct - a.pct);
   }, [isAdmin, selectedAgent, validGlobalAgents]);
 
-  // 4. DESEMPENHO SEMANAL (Também converte para Média das Médias por Semana)
+  // 7. Semanas do Gráfico (Volumétrico)
   const weeklyStats = useMemo(() => {
     const stats = {
-      1: { name: "1ª Semana", label: "26/07 a 02/08", agents: {} },
-      2: { name: "2ª Semana", label: "03/08 a 10/08", agents: {} },
-      3: { name: "3ª Semana", label: "11/08 a 18/08", agents: {} },
-      4: { name: "4ª Semana", label: "19/08 a 25/08", agents: {} },
+      1: { name: "1ª Semana", label: "26/07 a 02/08", items: [] },
+      2: { name: "2ª Semana", label: "03/08 a 10/08", items: [] },
+      3: { name: "3ª Semana", label: "11/08 a 18/08", items: [] },
+      4: { name: "4ª Semana", label: "19/08 a 25/08", items: [] },
     };
     
     effectiveRecords.forEach(r => {
       const weekId = getMetrificationWeek(r.data);
       if (weekId && isValidRecord(r)) {
-        if (!stats[weekId].agents[r.atendente]) stats[weekId].agents[r.atendente] = { total: 0, pos: 0 };
-        stats[weekId].agents[r.atendente].total += 1;
-        if (Number(r.avaliacao) >= 4) stats[weekId].agents[r.atendente].pos += 1;
+        stats[weekId].items.push(r);
       }
     });
     
     return Object.values(stats).map(w => {
-      const agentsInWeek = Object.values(w.agents);
-      let weekPct = 0;
-      
-      if (agentsInWeek.length > 0) {
-         // Soma o percentual atingido por cada operador na semana e divide pelo número de operadores
-         const sumPcts = agentsInWeek.reduce((sum, a) => sum + ((a.pos / a.total) * 100), 0);
-         weekPct = sumPcts / agentsInWeek.length;
-      }
-      
-      const totalCalls = agentsInWeek.reduce((sum, a) => sum + a.total, 0);
-      return { name: w.name, label: w.label, total: totalCalls, pct: weekPct, hasData: totalCalls > 0 };
+      const totalCalls = w.items.length;
+      const posCalls = w.items.filter(r => Number(r.avaliacao) >= 4).length;
+      return { 
+        name: w.name, 
+        label: w.label, 
+        total: totalCalls, 
+        pct: totalCalls > 0 ? (posCalls / totalCalls) * 100 : 0, 
+        hasData: totalCalls > 0 
+      };
     });
   }, [effectiveRecords]);
 
-  // --- FIM DA LÓGICA ESPELHADA ---
+  // --- FIM DA LÓGICA ---
 
   const handleSort = (key) => {
     setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
