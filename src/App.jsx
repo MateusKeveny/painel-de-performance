@@ -99,7 +99,7 @@ function TeamBarChart({ data, t, goal, isCotas = false }) {
             <g key={i}>
               <rect x={x} y={y} width={barWidth} height={barH} fill={(!isCotas && d.val >= goal) ? t.accent : (isCotas ? t.accent : t.warn)} rx="4" opacity="0.9" />
               <text x={x + barWidth / 2} y={y - 8} textAnchor="middle" fill={t.text} fontSize="12" fontWeight="bold" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                {isCotas ? d.val.toLocaleString('pt-BR') : fmtPct(d.val)}
+                {isCotas ? d.val.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : fmtPct(d.val)}
               </text>
               <text x={x + barWidth / 2} y={height - paddingY + 20} textAnchor="middle" fill={t.textSoft} fontSize="11" style={{ fontFamily: "'Inter', sans-serif" }}>{d.name}</text>
               {!isCotas && <text x={x + barWidth / 2} y={height - paddingY + 34} textAnchor="middle" fill={t.textSoft} fontSize="9" opacity="0.7" style={{ fontFamily: "'Inter', sans-serif" }}>{d.total} av</text>}
@@ -214,12 +214,11 @@ export default function CsatApp() {
         }
       }
 
-      // 2. Busca Cotas Sincronizadas
+      // 2. Busca Cotas (Que agora trazem a coluna nome_atendente)
       let cotasData = [];
       try {
         let cotasQuery = supabase.from('cotas').select('*');
         if (!ADMIN_EMAILS.includes(userEmail)) {
-          // Filtro no backend usando ilike (não sensível a maiúsculas) para garantir leitura
           cotasQuery = cotasQuery.ilike('atendente', userEmail);
         }
         const { data: cData } = await cotasQuery;
@@ -236,6 +235,23 @@ export default function CsatApp() {
     })();
     return () => (mounted = false);
   }, [session, needsPasswordChange]);
+
+  // --- MAPA DE NOMES (Tradutor de Email para Nome Formal) ---
+  const agentNamesMap = useMemo(() => {
+    const map = {};
+    cotasRecords.forEach(c => {
+      if (c.atendente && c.nome_atendente) {
+        map[c.atendente.toLowerCase().trim()] = c.nome_atendente;
+      }
+    });
+    return map;
+  }, [cotasRecords]);
+
+  const getAgentName = (email) => {
+    if (!email || email === "ALL") return "Equipe";
+    const lowerEmail = email.toLowerCase().trim();
+    return agentNamesMap[lowerEmail] || lowerEmail.split('@')[0];
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault(); setAuthLoading(true); setAuthError("");
@@ -288,9 +304,9 @@ export default function CsatApp() {
       if (Number(r.avaliacao) >= 4) stats[agent].positive += 1;
     });
     return Object.entries(stats).map(([agent, d]) => ({
-      email: agent, name: agent.split('@')[0], pct: d.total > 0 ? (d.positive / d.total) * 100 : 0, total: d.total, positive: d.positive
+      email: agent, name: getAgentName(agent), pct: d.total > 0 ? (d.positive / d.total) * 100 : 0, total: d.total, positive: d.positive
     }));
-  }, [allRecords, selectedMonth]);
+  }, [allRecords, selectedMonth, getAgentName]);
 
   const validGlobalAgents = useMemo(() => allAgentsMap.filter(a => a.total >= 5), [allAgentsMap]);
   const validEmailsSet = useMemo(() => new Set(validGlobalAgents.map(a => a.email)), [validGlobalAgents]);
@@ -362,26 +378,23 @@ export default function CsatApp() {
     });
   }, [displayRecords, sortConfig]);
 
-  // --- MATEMÁTICA COTAS BLINDADA CONTRA ERROS DE DIGITAÇÃO DO EXCEL ---
+  // --- MATEMÁTICA COTAS ---
   
-  // 1. Ranking de Cotas da Equipe
   const cotasRanking = useMemo(() => {
     return cotasRecords
       .filter(c => c.mes_referencia?.trim() === selectedMonth.trim())
       .map(c => ({
-        name: c.atendente?.split('@')[0]?.toLowerCase().trim(),
+        name: getAgentName(c.atendente),
         val: Number(c.resultado_final) || 0,
         total: 0
       }))
       .sort((a, b) => b.val - a.val);
-  }, [cotasRecords, selectedMonth]);
+  }, [cotasRecords, selectedMonth, getAgentName]);
 
-  // 2. Tabela individual de Cotas
   const { currentAgentCotaTable, currentAgentCotaFinal } = useMemo(() => {
     let targetEmail = session?.user?.email?.toLowerCase().trim();
     if (isAdmin && selectedAgent !== "ALL") targetEmail = selectedAgent?.toLowerCase().trim();
     
-    // Filtro hiper-seguro ignorando maiúsculas e espaços que podem vir do Excel
     const agentCotaData = cotasRecords.find(c => 
       c.atendente?.toLowerCase().trim() === targetEmail && 
       c.mes_referencia?.trim() === selectedMonth.trim()
@@ -500,7 +513,7 @@ export default function CsatApp() {
                 <Shield size={16} color={t.warn} />
                 <select value={selectedAgent} onChange={(e) => setSelectedAgent(e.target.value)} className="bg-transparent text-sm font-semibold outline-none cursor-pointer" style={{ color: t.text }}>
                   <option value="ALL">Visão Geral (Equipe)</option>
-                  {agentsList.map(agent => <option key={agent} value={agent}>{agent}</option>)}
+                  {agentsList.map(agent => <option key={agent} value={agent}>{getAgentName(agent)}</option>)}
                 </select>
               </div>
             )}
@@ -508,9 +521,12 @@ export default function CsatApp() {
             <button onClick={() => setDark(!dark)} className="p-2.5 rounded-xl transition-colors duration-300 hover:opacity-80" style={{ backgroundColor: t.panel2, color: t.text }}>
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <div className="border text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 transition-colors duration-300" style={{ backgroundColor: t.panel2, color: t.textSoft, borderColor: t.border }}>
-              <User size={16} /> {session.user.email.split('@')[0]}
+            
+            {/* O NOME APARECE AQUI AGORA (Em vez do prefixo do e-mail) */}
+            <div className="border text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 transition-colors duration-300 font-semibold" style={{ backgroundColor: t.panel2, color: t.textSoft, borderColor: t.border, fontFamily: "'Montserrat', sans-serif" }}>
+              <User size={16} /> {getAgentName(session.user.email)}
             </div>
+            
             <button onClick={handleLogout} className="p-2.5 rounded-xl text-white hover:opacity-80 transition-colors duration-300 flex-shrink-0" style={{ backgroundColor: t.danger }} title="Sair">
               <LogOut size={18} />
             </button>
@@ -600,7 +616,7 @@ export default function CsatApp() {
                           else if (val === 4 || val === 5) badgeStyle = { backgroundColor: t.accentSoft, color: t.accent, borderColor: t.accent };
                           return (
                             <tr key={r.id} className="border-b hover:bg-black/5 transition-colors duration-300" style={{ borderColor: t.border }}>
-                              {isAdmin && selectedAgent === "ALL" && <td className="p-4 font-medium opacity-80">{r.atendente.split('@')[0]}</td>}
+                              {isAdmin && selectedAgent === "ALL" && <td className="p-4 font-medium opacity-80">{getAgentName(r.atendente)}</td>}
                               <td className="p-4 font-medium" style={{ fontFamily: "'Montserrat', sans-serif" }}>{r.protocolo}</td>
                               <td className="p-4 whitespace-nowrap">{r.data}</td>
                               <td className="p-4 text-center"><span className="px-3 py-1 rounded-md border font-bold text-sm" style={{ ...badgeStyle, fontFamily: "'Montserrat', sans-serif" }}>{r.avaliacao}</span></td>
@@ -658,7 +674,7 @@ export default function CsatApp() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
                         <h2 className="text-2xl font-bold flex flex-wrap items-center gap-2" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-                          Cota Mensal: <span style={{ color: t.accent }}>{selectedAgent === "ALL" ? session.user.email.split('@')[0] : selectedAgent.split('@')[0]}</span>
+                          Cota Mensal: <span style={{ color: t.accent }}>{getAgentName(selectedAgent === "ALL" ? session.user.email : selectedAgent)}</span>
                         </h2>
                         <p className="text-sm mt-1" style={{ color: t.textSoft }}>Resultados baseados no fechamento de {selectedMonth}</p>
                       </div>
@@ -667,7 +683,7 @@ export default function CsatApp() {
                         <div className="text-left sm:text-right p-4 rounded-xl border bg-black/5 dark:bg-white/5" style={{ borderColor: t.border }}>
                           <div className="text-xs uppercase tracking-widest font-semibold mb-1" style={{ color: t.textSoft }}>Resultado Final</div>
                           <div className="text-3xl font-bold" style={{ color: currentAgentCotaFinal < 0 ? t.danger : t.accent, fontFamily: "'Montserrat', sans-serif" }}>
-                            {currentAgentCotaFinal.toLocaleString('pt-BR')}
+                            {currentAgentCotaFinal.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                           </div>
                         </div>
                       )}
@@ -682,15 +698,12 @@ export default function CsatApp() {
                                 <th className="p-4 font-semibold uppercase tracking-wider text-xs">Categoria / Métrica</th>
                                 <th className="p-4 font-semibold uppercase tracking-wider text-xs text-center w-32">Pontuação</th>
                                 <th className="p-4 font-semibold uppercase tracking-wider text-xs text-center w-32">Feito</th>
-                                <th className="p-4 font-semibold uppercase tracking-wider text-xs text-right w-32">Cota</th>
+                                <th className="p-4 font-semibold uppercase tracking-wider text-xs text-right w-32">Cota ($)</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y" style={{ borderColor: t.border }}>
                               {currentAgentCotaTable.map((item, idx) => {
-                                // Pula a linha se a categoria estiver vazia (linhas em branco da planilha)
                                 if (!item.cat || item.cat.trim() === "") return null;
-
-                                // Identifica subtítulos (Ex: "Monitoria (Média semanal)", onde só tem a categoria preenchida e o resto vazio)
                                 const isSubHeader = (item.pts === "" && item.feito === "" && item.cota === "");
 
                                 if (isSubHeader) {
@@ -701,7 +714,6 @@ export default function CsatApp() {
                                   );
                                 }
 
-                                // Linhas normais de pontuação
                                 return (
                                   <tr key={idx} className="hover:bg-black/5 transition-colors" style={{ borderColor: t.border }}>
                                     <td className="px-4 py-3 font-medium" style={{ color: t.text }}>{item.cat}</td>
