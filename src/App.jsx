@@ -275,9 +275,8 @@ export default function CsatApp() {
     return allRecords;
   }, [allRecords, isAdmin, selectedAgent]);
 
-  // --- MATEMÁTICA IDÊNTICA AO EXCEL (MÉDIA DAS MÉDIAS DOS OPERADORES) ---
+  // --- NOVA REGRA EXATA DO EXCEL: SOMA APENAS OS OPERADORES COM MÉDIA MENSAL > 0% ---
 
-  // 1. Mapeia o C-SAT de cada operador individualmente no mês
   const allAgentsMap = useMemo(() => {
     const stats = {};
     allRecords.filter(isValidRecord).forEach(r => {
@@ -295,7 +294,7 @@ export default function CsatApp() {
     }));
   }, [allRecords]);
 
-  // 2. Filtra apenas operadores com C-SAT maior que 0% (removendo os zerados idêntico ao Excel)
+  // Filtra estritamente apenas quem tem C-SAT > 0% no mês (exclui os zerados do cálculo da média geral)
   const validGlobalAgents = useMemo(() => {
     return allAgentsMap.filter(a => a.pct > 0);
   }, [allAgentsMap]);
@@ -311,16 +310,15 @@ export default function CsatApp() {
     return displayRecords;
   }, [displayRecords, isAdmin, selectedAgent, validEmailsSet]);
 
-  // 3. MÉDIA DA EQUIPE (Média Aritmética das % dos operadores, idêntico à linha "Geral" do seu Excel)
+  // MÉDIA DA EQUIPE (Média aritmética apenas dos operadores com C-SAT > 0%)
   const liveTeamAvg = useMemo(() => {
     if (!isAdmin) return 82.93; 
     if (validGlobalAgents.length === 0) return 0;
     
     const sumOfPcts = validGlobalAgents.reduce((sum, a) => sum + a.pct, 0);
-    return sumOfPcts / validGlobalAgents.length; // Aqui está o segredo: Média das Médias
+    return sumOfPcts / validGlobalAgents.length;
   }, [validGlobalAgents, isAdmin]);
 
-  // 4. C-SAT Consolidado / Individual
   const myPct = useMemo(() => {
     if (isAdmin && selectedAgent === "ALL") return liveTeamAvg;
     
@@ -331,13 +329,12 @@ export default function CsatApp() {
     return (positiveRecords.length / validRecords.length) * 100;
   }, [effectiveRecords, isAdmin, selectedAgent, liveTeamAvg]);
 
-  // 5. Ranking (Ordenado do maior para o menor)
   const agentsStats = useMemo(() => {
     if (!isAdmin || selectedAgent !== "ALL") return [];
     return validGlobalAgents.sort((a, b) => b.pct - a.pct);
   }, [isAdmin, selectedAgent, validGlobalAgents]);
 
-  // 6. DESEMPENHO SEMANAL (Média das Médias por semana, idêntico ao Excel)
+  // DESEMPENHO SEMANAL (Média apenas dos operadores que tiveram chamados válidos > 0% na semana)
   const weeklyStats = useMemo(() => {
     const stats = {
       1: { name: "1ª Semana", label: "26/07 a 02/08", agents: {} },
@@ -346,7 +343,7 @@ export default function CsatApp() {
       4: { name: "4ª Semana", label: "19/08 a 25/08", agents: {} },
     };
     
-    effectiveRecords.forEach(r => {
+    allRecords.forEach(r => {
       const weekId = getMetrificationWeek(r.data);
       if (weekId && isValidRecord(r)) {
         if (!stats[weekId].agents[r.atendente]) stats[weekId].agents[r.atendente] = { total: 0, pos: 0 };
@@ -356,21 +353,24 @@ export default function CsatApp() {
     });
     
     return Object.values(stats).map(w => {
-      const agentsInWeek = Object.values(w.agents);
-      let weekPct = 0;
+      // Pega apenas os agentes daquela semana que tiveram C-SAT > 0%
+      const agentsInWeek = Object.values(w.agents).map(a => ({
+        pct: (a.pos / a.total) * 100,
+        total: a.total
+      })).filter(a => a.pct > 0);
       
+      let weekPct = 0;
       if (agentsInWeek.length > 0) {
-         // Soma o percentual de cada operador na semana e divide pelo número de operadores ativos
-         const sumPcts = agentsInWeek.reduce((sum, a) => sum + ((a.pos / a.total) * 100), 0);
+         const sumPcts = agentsInWeek.reduce((sum, a) => sum + a.pct, 0);
          weekPct = sumPcts / agentsInWeek.length;
       }
       
       const totalCalls = agentsInWeek.reduce((sum, a) => sum + a.total, 0);
       return { name: w.name, label: w.label, total: totalCalls, pct: weekPct, hasData: agentsInWeek.length > 0 };
     });
-  }, [effectiveRecords]);
+  }, [allRecords]);
 
-  // --- FIM DA LÓGICA DO EXCEL ---
+  // --- FIM DA LÓGICA ---
 
   const handleSort = (key) => {
     setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
